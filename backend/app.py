@@ -12,7 +12,7 @@ import time
 import webbrowser
 from datetime import date, timedelta
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from flask import (
     Flask,
@@ -40,7 +40,19 @@ from backend.config import (
     LOG_FILE,
     LOG_LEVEL,
 )
-from backend.db import init_db, SessionLocal, get_single_token, upsert_single_token
+from backend.db import (
+    init_db,
+    SessionLocal,
+    get_single_token,
+    upsert_single_token,
+    create_participant,
+    get_participant,
+    get_all_participants,
+    get_token_for_participant,
+    upsert_token_for_participant,
+    disconnect_participant,
+    delete_participant,
+)
 from backend.sync_logic import (
     DEFAULT_RESOURCES,
     RESOURCE_LABELS,
@@ -128,6 +140,11 @@ def get_selected_resources(raw_values: List[str]) -> List[str]:
     return raw_values
 
 
+def get_current_participant() -> Optional[str]:
+    """Get the currently selected participant ID from session."""
+    return session.get("current_participant_id")
+
+
 # -----------------------------------------------------------------------------
 # Routes
 # -----------------------------------------------------------------------------
@@ -136,23 +153,58 @@ def dashboard():
     logger.debug("Dashboard accessed")
     db = get_db()
     try:
-        token = get_single_token(db)
+        # Get all participants and current selection
+        participants = get_all_participants(db)
+        
+        # If no participants exist, show welcome screen
+        if not participants:
+            logger.info("No participants found")
+            return render_template(
+                "dashboard.html",
+                token=None,
+                participants=[],
+                current_participant_id=None,
+                sync_status=None,
+                sync_message=None,
+                sync_date=None,
+                default_date=(date.today() - timedelta(days=1)).isoformat(),
+                resource_options=RESOURCE_OPTIONS,
+                selected_resources=DEFAULT_RESOURCES.copy(),
+            )
+        
+        current_pid = get_current_participant()
+        
+        # If no current participant selected, or current one doesn't exist, select first
+        if not current_pid or not any(p.participant_id == current_pid for p in participants):
+            logger.info(f"Selecting first participant: {participants[0].participant_id}")
+            current_pid = participants[0].participant_id
+            session["current_participant_id"] = current_pid
+        
+        # Get token for current participant
+        token = get_token_for_participant(db, current_pid)
+        
         sync_status = request.args.get("sync_status")
         sync_message = request.args.get("sync_message")
         sync_date = request.args.get("sync_date")
 
         yesterday = date.today() - timedelta(days=1)
         selected_resources = session.get("selected_resources") or DEFAULT_RESOURCES.copy()
+        
+        # Get rate limit info from session
+        rate_limit_info = session.get("rate_limit_info", {})
 
         return render_template(
             "dashboard.html",
             token=token,
+            participants=participants,
+            current_participant_id=current_pid,
             sync_status=sync_status,
             sync_message=sync_message,
             sync_date=sync_date,
             default_date=yesterday.isoformat(),
             resource_options=RESOURCE_OPTIONS,
             selected_resources=selected_resources,
+            rate_limit_info=rate_limit_info,
         )
     finally:
         db.close()
@@ -165,14 +217,32 @@ def help_page():
 
 @app.route("/fitbit/authorize")
 def fitbit_authorize():
-    logger.info("Initiating Fitbit OAuth authorization")
-    session.clear()
+    """Initiate OAuth for currently selected participant."""
+    current_pid = get_current_participant()
+    if not current_pid:
+        return redirect(url_for("dashboard", sync_status="error", 
+                              sync_message="No participant selected. Please add a participant first."))
+    
+    logger.info(f"Initiating Fitbit OAuth authorization for participant: {current_pid}")
+    logger.info(f"Using shared app credentials (Client ID: {CLIENT_ID[:10]}...)")
+    
+    # Clear only OAuth state, keep participant selection
+    session.pop("oauth_state", None)
 
     try:
         oauth = FitbitOauth2Client(CLIENT_ID, CLIENT_SECRET, redirect_uri=REDIRECT_URI)
         url, state = oauth.authorize_token_url(scope=SCOPES)
+        
+        # Force Fitbit to show login screen (don't auto-login with existing session)
+        # Add prompt=login to force re-authentication
+        if "?" in url:
+            url += "&prompt=login"
+        else:
+            url += "?prompt=login"
+        
         session["oauth_state"] = state
-        logger.info(f"Redirecting to Fitbit authorization URL (state: {state[:10]}...)")
+        session["oauth_participant_id"] = current_pid  # Remember which participant is authorizing
+        logger.info(f"Redirecting to Fitbit authorization for {current_pid} (state: {state[:10]}...) - forcing login prompt")
         return redirect(url)
     except Exception as e:
         logger.error(f"Failed to initiate OAuth: {e}", exc_info=True)
@@ -221,24 +291,43 @@ def fitbit_callback():
         ), 400
 
     try:
-        oauth = FitbitOauth2Client(CLIENT_ID, CLIENT_SECRET, redirect_uri=REDIRECT_URI)
-        token = oauth.fetch_access_token(code)
-        user_id = token.get("user_id", "unknown")
-        logger.info(f"Successfully obtained access token for user: {user_id}")
-
+        # Get participant ID from OAuth session
+        participant_id = session.get("oauth_participant_id")
+        if not participant_id:
+            return render_template(
+                "error.html",
+                title="OAuth Error",
+                message="No participant was selected for OAuth.",
+                details="Please return to the dashboard and try again.",
+            ), 400
+        
         db = get_db()
         try:
-            upsert_single_token(db, token)
-            logger.info(f"Token stored in database for user: {user_id}")
+            # Ensure participant exists
+            participant = get_participant(db, participant_id)
+            if not participant:
+                create_participant(db, participant_id, name=f"Participant {participant_id}")
+            
+            # Use shared app credentials
+            oauth = FitbitOauth2Client(CLIENT_ID, CLIENT_SECRET, redirect_uri=REDIRECT_URI)
+            token = oauth.fetch_access_token(code)
+            user_id = token.get("user_id", "unknown")
+            
+            logger.info(f"Successfully obtained access token for participant {participant_id}, Fitbit user: {user_id}")
+            
+            upsert_token_for_participant(db, participant_id, token)
+            logger.info(f"Token stored for participant: {participant_id}")
         finally:
             db.close()
 
         session.pop("oauth_state", None)
+        session.pop("oauth_participant_id", None)
+        
         return render_template(
             "success.html",
             title="Fitbit Connected Successfully",
-            message="Your Fitbit account has been connected successfully!",
-            details=f"User ID: {user_id}",
+            message=f"Fitbit account connected for participant '{participant_id}'!",
+            details=f"Fitbit User ID: {user_id}",
         )
     except Exception as e:
         logger.error(f"Token exchange failed: {e}", exc_info=True)
@@ -250,13 +339,26 @@ def fitbit_callback():
         ), 500
 
 
+@app.route("/sync/status/<task_id>", methods=["GET"])
+def sync_status(task_id: str):
+    """Get sync status for progress updates."""
+    # For now, return a simple response
+    # In future, could use Redis or database to track real progress
+    return jsonify({"status": "in_progress"})
+
+
 @app.route("/sync", methods=["POST"])
 def sync_now():
-    logger.info("Data sync triggered")
+    current_pid = get_current_participant()
+    if not current_pid:
+        return redirect(url_for("dashboard", sync_status="error", sync_message="No participant selected."))
+    
+    logger.info(f"Data sync triggered for participant: {current_pid}")
     db = get_db()
 
     start_str = request.form.get("start_date")
     end_str = request.form.get("end_date")
+    granularity = request.form.get("granularity", "1min")
     raw_resources = get_selected_resources(request.form.getlist("resources"))
     effective_resources = normalize_resources(raw_resources)
 
@@ -264,12 +366,18 @@ def sync_now():
         if start_str and end_str:
             start_date = date.fromisoformat(start_str)
             end_date = date.fromisoformat(end_str)
-            result = sync_date_range(db, start_date, end_date, resources=effective_resources)
-            success_msg = f"Synced {result.get('count', 0)} days from {start_str} to {end_str}"
+            result = sync_date_range(db, start_date, end_date, participant_id=current_pid, 
+                                    resources=effective_resources, granularity=granularity)
+            success_msg = f"Synced {result.get('count', 0)} days for {current_pid} ({granularity} granularity)"
         else:
-            result = sync_single_user(db, resources=effective_resources)
-            success_msg = f"Successfully synced data for {result.get('date')}"
+            result = sync_single_user(db, participant_id=current_pid, resources=effective_resources, 
+                                     granularity=granularity)
+            success_msg = f"Successfully synced data for {current_pid} on {result.get('date')}"
 
+        # Store rate limit info in session for display
+        if result.get("rate_limit"):
+            session["rate_limit_info"] = result["rate_limit"]
+        
         if result["status"] == "ok":
             logger.info(success_msg)
         elif result["status"] == "no_token":
@@ -311,7 +419,12 @@ def sync_now():
 
 @app.route("/export", methods=["POST"])
 def export_data_route():
-    logger.info("Export requested")
+    current_pid = get_current_participant()
+    if not current_pid:
+        return redirect(url_for("dashboard", sync_status="error", sync_message="No participant selected."))
+    
+    logger.info(f"Export requested for participant: {current_pid}")
+    
     start_str = request.form.get("start_date")
     end_str = request.form.get("end_date")
     format_type = request.form.get("format", "csv")
@@ -331,7 +444,7 @@ def export_data_route():
         start_date = date.fromisoformat(start_str)
         end_date = date.fromisoformat(end_str)
         file_path = Path(
-            export_data(start_date, end_date, format_type, resources=effective_resources)
+            export_data(start_date, end_date, format_type, participant_id=current_pid, resources=effective_resources)
         ).resolve()
 
         if not file_path.exists():
@@ -345,19 +458,17 @@ def export_data_route():
 
 @app.route("/disconnect", methods=["POST"])
 def disconnect():
-    logger.info("Disconnect requested")
+    current_pid = get_current_participant()
+    if not current_pid:
+        return redirect(url_for("dashboard", sync_status="error", sync_message="No participant selected."))
+    
+    logger.info(f"Disconnect requested for participant: {current_pid}")
     db = get_db()
     try:
-        token = get_single_token(db)
-        if token:
-            user_id = token.fitbit_user_id
-            db.delete(token)
-            db.commit()
-            session.clear()
-            logger.info(f"Disconnected user: {user_id}")
-            status, message = "info", "Fitbit account disconnected successfully."
+        if disconnect_participant(db, current_pid):
+            status, message = "info", f"Fitbit disconnected for participant '{current_pid}'."
         else:
-            status, message = "warning", "No Fitbit account was connected."
+            status, message = "warning", f"No Fitbit account was connected for '{current_pid}'."
         return redirect(url_for("dashboard", sync_status=status, sync_message=message))
     finally:
         db.close()
@@ -368,6 +479,75 @@ def reset_session():
     logger.info("Manual session reset requested")
     session.clear()
     return redirect(url_for("dashboard"))
+
+
+# -----------------------------------------------------------------------------
+# Participant Management Routes
+# -----------------------------------------------------------------------------
+
+@app.route("/participants/add", methods=["POST"])
+def add_participant():
+    """Add a new participant."""
+    participant_id = request.form.get("participant_id", "").strip()
+    name = request.form.get("name", "").strip()
+    email = request.form.get("email", "").strip()
+    notes = request.form.get("notes", "").strip()
+    
+    if not participant_id:
+        return redirect(url_for("dashboard", sync_status="error", sync_message="Participant ID is required."))
+    
+    db = get_db()
+    try:
+        create_participant(db, participant_id, name=name or None, email=email or None, notes=notes or None)
+        # Automatically switch to new participant
+        session["current_participant_id"] = participant_id
+        
+        return redirect(url_for("dashboard", sync_status="success", 
+                              sync_message=f"Participant '{participant_id}' created successfully."))
+    except ValueError as e:
+        return redirect(url_for("dashboard", sync_status="error", sync_message=str(e)))
+    finally:
+        db.close()
+
+
+@app.route("/participants/select/<participant_id>", methods=["GET", "POST"])
+def select_participant(participant_id: str):
+    """Switch to a different participant."""
+    db = get_db()
+    try:
+        participant = get_participant(db, participant_id)
+        if not participant:
+            return redirect(url_for("dashboard", sync_status="error", sync_message=f"Participant '{participant_id}' not found."))
+        
+        # Switch to this participant
+        session["current_participant_id"] = participant_id
+        
+        # Check if they have a connected Fitbit account
+        token = get_token_for_participant(db, participant_id)
+        if token:
+            logger.info(f"Switched to participant: {participant_id} (Connected to Fitbit user {token.fitbit_user_id})")
+        else:
+            logger.info(f"Switched to participant: {participant_id} (Not connected)")
+        
+        return redirect(url_for("dashboard"))
+    finally:
+        db.close()
+
+
+@app.route("/participants/delete/<participant_id>", methods=["POST"])
+def delete_participant_route(participant_id: str):
+    """Delete a participant and all their data."""
+    db = get_db()
+    try:
+        delete_participant(db, participant_id)
+        
+        # If we deleted the current participant, clear selection
+        if get_current_participant() == participant_id:
+            session.pop("current_participant_id", None)
+        
+        return redirect(url_for("dashboard", sync_status="info", sync_message=f"Participant '{participant_id}' deleted."))
+    finally:
+        db.close()
 
 
 # -----------------------------------------------------------------------------

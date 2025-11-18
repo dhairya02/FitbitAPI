@@ -38,6 +38,28 @@
                     Go to Dashboard
                 </a>
             </div>
+            
+            <!-- Auto-close if in popup -->
+            <script>
+            if (window.opener) {
+                // We're in a popup - show message and auto-close
+                document.body.innerHTML = `
+                    <div style="display: flex; align-items: center; justify-center; height: 100vh; flex-direction: column; font-family: sans-serif;">
+                        <div style="text-align: center; padding: 40px; background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; max-width: 400px;">
+                            <svg style="width: 64px; height: 64px; margin: 0 auto 20px; color: #16a34a;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <h2 style="color: #15803d; font-size: 24px; font-weight: bold; margin-bottom: 12px;">Success!</h2>
+                            <p style="color: #166534; margin-bottom: 20px;">Fitbit connected successfully.</p>
+                            <p style="color: #166534; font-size: 14px;">This window will close automatically...</p>
+                        </div>
+                    </div>
+                `;
+                setTimeout(function() {
+                    window.close();
+                }, 1500);
+            }
+            </script>
         </div>
     </div>
 </div>

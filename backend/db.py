@@ -1,12 +1,16 @@
 """
 Database models and utilities for Fitbit token storage.
-Uses SQLAlchemy ORM with SQLite.
+Now supports multiple participants.
 """
+import logging
 from datetime import datetime
-from typing import Optional, Dict, Any, Union
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from typing import Optional, Dict, Any, Union, List
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Index
+from sqlalchemy.orm import sessionmaker, declarative_base, Session, relationship
 from backend.config import DATABASE_URL
+
+# Get logger
+logger = logging.getLogger("fitbit_app.db")
 
 # SQLAlchemy setup
 engine = create_engine(DATABASE_URL, future=True)
@@ -14,22 +18,45 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
 
+class Participant(Base):
+    """
+    Model for storing participant information.
+    Each participant connects their own Fitbit account using shared app credentials.
+    """
+    __tablename__ = "participants"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    participant_id = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=True)
+    email = Column(String, nullable=True)
+    notes = Column(String, nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationship to tokens
+    tokens = relationship("FitbitToken", back_populates="participant", cascade="all, delete-orphan")
+    
+    def __repr__(self) -> str:
+        return f"<Participant(id={self.id}, participant_id='{self.participant_id}', name='{self.name}')>"
+
+
 class FitbitToken(Base):
     """
     Model for storing Fitbit OAuth tokens.
-    
-    Designed for single-user now, but structured for future multi-user support
-    via the participant_id field.
+    Each token is associated with a participant.
+    Note: A Fitbit account can be connected to multiple participants if needed.
     """
     __tablename__ = "fitbit_tokens"
     
     id = Column(Integer, primary_key=True, autoincrement=True)
     
-    # For future multi-user support; currently always "default"
-    participant_id = Column(String, nullable=True, default="default")
+    # Foreign key to participant
+    participant_id = Column(String, ForeignKey("participants.participant_id"), nullable=False, index=True)
     
-    # Fitbit user identifier
-    fitbit_user_id = Column(String, nullable=False, unique=True)
+    # Fitbit user identifier (removed UNIQUE constraint to allow sharing)
+    fitbit_user_id = Column(String, nullable=False)
     
     # OAuth tokens
     access_token = Column(String, nullable=False)
@@ -44,6 +71,9 @@ class FitbitToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Relationship
+    participant = relationship("Participant", back_populates="tokens")
+    
     def __repr__(self) -> str:
         return (
             f"<FitbitToken(id={self.id}, "
@@ -52,25 +82,22 @@ class FitbitToken(Base):
         )
 
 
+# Create index for faster lookups
+Index('idx_participant_token', FitbitToken.participant_id)
+
+
 def init_db() -> None:
     """
     Initialize the database by creating all tables.
     Safe to call multiple times.
     """
-    Base.metadata.create_all(bind=engine)
-
-
-def get_single_token(session: Session) -> Optional[FitbitToken]:
-    """
-    Retrieve the single token for the default user.
-    
-    Args:
-        session: SQLAlchemy session
-        
-    Returns:
-        FitbitToken instance if exists, None otherwise
-    """
-    return session.query(FitbitToken).first()
+    logger.info("Initializing database")
+    try:
+        Base.metadata.create_all(bind=engine)
+        logger.info("Database tables created/verified successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}", exc_info=True)
+        raise
 
 
 def normalize_scope(scope: Union[str, list, tuple]) -> str:
@@ -88,27 +115,116 @@ def normalize_scope(scope: Union[str, list, tuple]) -> str:
     return str(scope)
 
 
-def upsert_single_token(session: Session, token_dict: Dict[str, Any]) -> FitbitToken:
+# ============================================================================
+# Participant Management
+# ============================================================================
+
+def create_participant(session: Session, participant_id: str, name: str = None, 
+                       email: str = None, notes: str = None) -> Participant:
     """
-    Insert or update the single token for the default user.
-    
-    For single-user mode, we maintain at most one token row.
-    If a token exists, update it; otherwise, create a new one.
+    Create a new participant.
     
     Args:
         session: SQLAlchemy session
-        token_dict: Dictionary containing token information with keys:
-            - access_token (required)
-            - refresh_token (required)
-            - expires_at (required)
-            - user_id (optional, will be used as fitbit_user_id)
-            - scope (optional)
-            - token_type (optional)
-            
+        participant_id: Unique identifier for the participant
+        name: Optional display name
+        email: Optional email
+        notes: Optional notes
+        
     Returns:
-        The created or updated FitbitToken instance
+        Created Participant instance
     """
-    existing_token = get_single_token(session)
+    logger.info(f"Creating participant: {participant_id}")
+    
+    # Check if participant already exists
+    existing = session.query(Participant).filter_by(participant_id=participant_id).first()
+    if existing:
+        raise ValueError(f"Participant '{participant_id}' already exists")
+    
+    participant = Participant(
+        participant_id=participant_id,
+        name=name,
+        email=email,
+        notes=notes,
+    )
+    session.add(participant)
+    session.commit()
+    logger.info(f"Participant created: {participant_id}")
+    return participant
+
+
+def get_participant(session: Session, participant_id: str) -> Optional[Participant]:
+    """Get a participant by ID."""
+    return session.query(Participant).filter_by(participant_id=participant_id).first()
+
+
+def get_all_participants(session: Session) -> List[Participant]:
+    """Get all participants ordered by creation date."""
+    return session.query(Participant).order_by(Participant.created_at).all()
+
+
+def update_participant(session: Session, participant_id: str, **kwargs) -> Participant:
+    """Update participant information."""
+    participant = get_participant(session, participant_id)
+    if not participant:
+        raise ValueError(f"Participant '{participant_id}' not found")
+    
+    for key, value in kwargs.items():
+        if hasattr(participant, key):
+            setattr(participant, key, value)
+    
+    participant.updated_at = datetime.utcnow()
+    session.commit()
+    logger.info(f"Participant updated: {participant_id}")
+    return participant
+
+
+def delete_participant(session: Session, participant_id: str) -> None:
+    """Delete a participant and all associated tokens."""
+    participant = get_participant(session, participant_id)
+    if participant:
+        session.delete(participant)
+        session.commit()
+        logger.info(f"Participant deleted: {participant_id}")
+
+
+# ============================================================================
+# Token Management (Multi-Participant)
+# ============================================================================
+
+def get_token_for_participant(session: Session, participant_id: str) -> Optional[FitbitToken]:
+    """
+    Get the Fitbit token for a specific participant.
+    
+    Args:
+        session: SQLAlchemy session
+        participant_id: Participant identifier
+        
+    Returns:
+        FitbitToken if exists, None otherwise
+    """
+    return session.query(FitbitToken).filter_by(participant_id=participant_id).first()
+
+
+def upsert_token_for_participant(session: Session, participant_id: str, 
+                                  token_dict: Dict[str, Any]) -> FitbitToken:
+    """
+    Insert or update token for a specific participant.
+    
+    Args:
+        session: SQLAlchemy session
+        participant_id: Participant identifier
+        token_dict: Token dictionary from Fitbit OAuth
+        
+    Returns:
+        Created or updated FitbitToken
+    """
+    # Ensure participant exists
+    participant = get_participant(session, participant_id)
+    if not participant:
+        raise ValueError(f"Participant '{participant_id}' does not exist. Create participant first.")
+    
+    existing_token = get_token_for_participant(session, participant_id)
     
     # Extract and normalize values
     access_token = token_dict["access_token"]
@@ -118,30 +234,73 @@ def upsert_single_token(session: Session, token_dict: Dict[str, Any]) -> FitbitT
     scope = normalize_scope(token_dict.get("scope", ""))
     token_type = token_dict.get("token_type", "Bearer")
     
-    if existing_token:
-        # Update existing token
-        existing_token.participant_id = "default"
-        existing_token.fitbit_user_id = fitbit_user_id
-        existing_token.access_token = access_token
-        existing_token.refresh_token = refresh_token
-        existing_token.expires_at = expires_at
-        existing_token.scope = scope
-        existing_token.token_type = token_type
-        existing_token.updated_at = datetime.utcnow()
-        session.commit()
-        return existing_token
-    else:
-        # Create new token
-        new_token = FitbitToken(
-            participant_id="default",
-            fitbit_user_id=fitbit_user_id,
-            access_token=access_token,
-            refresh_token=refresh_token,
-            expires_at=expires_at,
-            scope=scope,
-            token_type=token_type,
-        )
-        session.add(new_token)
-        session.commit()
-        return new_token
+    try:
+        if existing_token:
+            logger.info(f"Updating token for participant: {participant_id}, Fitbit user: {fitbit_user_id}")
+            existing_token.fitbit_user_id = fitbit_user_id
+            existing_token.access_token = access_token
+            existing_token.refresh_token = refresh_token
+            existing_token.expires_at = expires_at
+            existing_token.scope = scope
+            existing_token.token_type = token_type
+            existing_token.updated_at = datetime.utcnow()
+            session.commit()
+            return existing_token
+        else:
+            logger.info(f"Creating token for participant: {participant_id}, Fitbit user: {fitbit_user_id}")
+            new_token = FitbitToken(
+                participant_id=participant_id,
+                fitbit_user_id=fitbit_user_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_at=expires_at,
+                scope=scope,
+                token_type=token_type,
+            )
+            session.add(new_token)
+            session.commit()
+            return new_token
+    except Exception as e:
+        logger.error(f"Failed to upsert token for {participant_id}: {e}", exc_info=True)
+        session.rollback()
+        raise
 
+
+def disconnect_participant(session: Session, participant_id: str) -> bool:
+    """
+    Disconnect a participant's Fitbit account (delete their token).
+    
+    Returns:
+        True if token was deleted, False if no token existed
+    """
+    token = get_token_for_participant(session, participant_id)
+    if token:
+        session.delete(token)
+        session.commit()
+        logger.info(f"Disconnected Fitbit for participant: {participant_id}")
+        return True
+    return False
+
+
+# ============================================================================
+# Backward Compatibility (for single-user code)
+# ============================================================================
+
+def get_single_token(session: Session) -> Optional[FitbitToken]:
+    """
+    Retrieve the first token (backward compatibility).
+    For multi-user apps, use get_token_for_participant instead.
+    """
+    return session.query(FitbitToken).first()
+
+
+def upsert_single_token(session: Session, token_dict: Dict[str, Any]) -> FitbitToken:
+    """
+    Upsert token for default participant (backward compatibility).
+    """
+    # Ensure "default" participant exists
+    participant = get_participant(session, "default")
+    if not participant:
+        participant = create_participant(session, "default", name="Default User")
+    
+    return upsert_token_for_participant(session, "default", token_dict)

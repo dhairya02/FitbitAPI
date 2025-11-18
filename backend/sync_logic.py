@@ -15,7 +15,7 @@ from fitbit import Fitbit
 from sqlalchemy.orm import Session
 
 from backend.config import CLIENT_ID, CLIENT_SECRET, DATA_DIR
-from backend.db import get_single_token, upsert_single_token
+from backend.db import get_token_for_participant, upsert_token_for_participant, get_participant
 
 # ----------------------------------------------------------------------------
 # Path + resource helpers
@@ -57,10 +57,13 @@ def normalize_resources(resources: Optional[List[str]]) -> List[str]:
 logger = logging.getLogger("fitbit_app.sync")
 
 
-def get_fitbit_client(session: Session, token) -> Fitbit:
+def get_fitbit_client(session: Session, token, participant) -> Fitbit:
+    """Create Fitbit client using shared app credentials."""
     def refresh_cb(new_token: Dict[str, Any]) -> None:
         logger.info("Access token refreshed automatically")
-        upsert_single_token(session, new_token)
+        upsert_token_for_participant(session, token.participant_id, new_token)
+
+    logger.debug(f"Creating Fitbit client for participant {participant.participant_id}")
 
     return Fitbit(
         CLIENT_ID,
@@ -80,51 +83,112 @@ def sync_date_range(
     session: Session,
     start_date: date,
     end_date: date,
+    participant_id: str = "default",
     resources: Optional[List[str]] = None,
+    granularity: str = "1min",
 ) -> Dict[str, Any]:
     resources = normalize_resources(resources)
-    logger.info(f"Starting date range sync: {start_date} to {end_date}, resources={resources}")
+    logger.info(f"Starting date range sync for {participant_id}: {start_date} to {end_date}, resources={resources}, granularity={granularity}")
 
-    token = get_single_token(session)
+    token = get_token_for_participant(session, participant_id)
     if not token:
-        return {"status": "no_token", "message": "No Fitbit account connected."}
+        return {"status": "no_token", "message": f"No Fitbit account connected for participant '{participant_id}'."}
+
+    participant = get_participant(session, participant_id)
+    if not participant:
+        return {"status": "error", "message": f"Participant '{participant_id}' not found in database."}
 
     data_root = resolve_path(DATA_DIR)
-    data_path = (data_root / "default").resolve()
+    data_path = (data_root / participant_id).resolve()
     data_path.mkdir(parents=True, exist_ok=True)
 
     try:
-        fb = get_fitbit_client(session, token)
+        fb = get_fitbit_client(session, token, participant)
         synced_days: List[str] = []
         errors: List[str] = []
+        
+        # Track rate limit info (will be populated from API responses)
+        rate_limit_info = {
+            "limit": None,
+            "remaining": None,
+            "reset_time": None,
+        }
 
         current_date = start_date
         while current_date <= end_date:
             date_str = current_date.isoformat()
             logger.info(f"Syncing data for {date_str}")
+            
+            # Add delay between requests to avoid rate limiting
+            import time
+            if current_date != start_date:  # Don't delay on first request
+                time.sleep(1)  # 1 second between days
 
             try:
                 if "steps" in resources:
+                    # Daily summary
                     steps = fb.time_series("activities/steps", base_date=date_str, period="1d")
-                    with open(data_path / f"{date_str}_steps.json", "w") as f:
+                    with open(data_path / f"{date_str}_steps_summary.json", "w") as f:
                         json.dump(steps, f, indent=2)
+                    
+                    # Try to extract rate limit info from the client's last response
+                    try:
+                        if hasattr(fb, 'client') and hasattr(fb.client, 'session'):
+                            last_response = fb.client.session.last_response if hasattr(fb.client.session, 'last_response') else None
+                            if last_response and hasattr(last_response, 'headers'):
+                                rate_limit_info['limit'] = last_response.headers.get('Fitbit-Rate-Limit-Limit')
+                                rate_limit_info['remaining'] = last_response.headers.get('Fitbit-Rate-Limit-Remaining')
+                                rate_limit_info['reset_time'] = last_response.headers.get('Fitbit-Rate-Limit-Reset')
+                    except Exception:
+                        pass
+                    
+                    # Intraday data - use correct API method with time range
+                    try:
+                        steps_intraday = fb.intraday_time_series(
+                            resource="activities/steps",
+                            base_date=date_str,
+                            detail_level=granularity,
+                            start_time="00:00",
+                            end_time="23:59"
+                        )
+                        with open(data_path / f"{date_str}_steps_intraday_{granularity}.json", "w") as f:
+                            json.dump(steps_intraday, f, indent=2)
+                        logger.debug(f"Steps intraday ({granularity}) saved for {date_str}")
+                    except Exception as steps_intra_error:
+                        logger.warning(f"Failed to fetch steps intraday for {date_str}: {steps_intra_error}")
+                        # Continue even if intraday fails
 
                 if "heartrate" in resources:
+                    # Daily summary
                     try:
-                        hr = fb.intraday_time_series(
-                            "activities/heart", base_date=date_str, detail_level="1min"
+                        hr_summary = fb.time_series("activities/heart", base_date=date_str, period="1d")
+                        with open(data_path / f"{date_str}_heartrate_summary.json", "w") as f:
+                            json.dump(hr_summary, f, indent=2)
+                    except Exception:
+                        pass
+                    
+                    # Intraday data - use correct API method with time range
+                    try:
+                        hr_intraday = fb.intraday_time_series(
+                            resource="activities/heart",
+                            base_date=date_str,
+                            detail_level=granularity,
+                            start_time="00:00",
+                            end_time="23:59"
                         )
-                        with open(data_path / f"{date_str}_heartrate_1min.json", "w") as f:
-                            json.dump(hr, f, indent=2)
+                        with open(data_path / f"{date_str}_heartrate_intraday_{granularity}.json", "w") as f:
+                            json.dump(hr_intraday, f, indent=2)
+                        logger.debug(f"Heart rate intraday ({granularity}) saved for {date_str}")
                     except Exception as hr_error:
-                        logger.warning(f"Failed to fetch heart rate for {date_str}: {hr_error}")
-                        errors.append(f"{date_str} HR: {hr_error}")
+                        logger.warning(f"Failed to fetch heart rate intraday for {date_str}: {hr_error}")
+                        errors.append(f"{date_str} HR Intraday: {hr_error}")
 
                 if "sleep" in resources:
                     try:
                         sleep = fb.get_sleep(date=current_date)
                         with open(data_path / f"{date_str}_sleep.json", "w") as f:
                             json.dump(sleep, f, indent=2)
+                        logger.debug(f"Sleep data saved for {date_str} (includes sleep stages)")
                     except Exception as sleep_error:
                         logger.warning(f"Failed to fetch sleep for {date_str}: {sleep_error}")
                         errors.append(f"{date_str} Sleep: {sleep_error}")
@@ -141,8 +205,15 @@ def sync_date_range(
                 synced_days.append(date_str)
 
             except Exception as e:
-                logger.error(f"Failed to sync {date_str}: {e}")
-                errors.append(f"{date_str}: {e}")
+                error_msg = str(e)
+                logger.error(f"Failed to sync {date_str}: {error_msg}")
+                
+                # Check if it's a rate limit error
+                if "retry-after" in error_msg.lower() or "rate" in error_msg.lower():
+                    logger.warning(f"Rate limit hit at {date_str}. Consider reducing date range or adding delays.")
+                    errors.append(f"{date_str}: Rate limited by Fitbit API")
+                else:
+                    errors.append(f"{date_str}: {error_msg}")
 
             current_date += timedelta(days=1)
 
@@ -155,21 +226,30 @@ def sync_date_range(
                 logger.warning(f"Failed to fetch profile: {profile_error}")
                 errors.append(f"Profile: {profile_error}")
 
-        return {
+        result = {
             "status": "ok",
             "synced_days": synced_days,
             "errors": errors,
             "count": len(synced_days),
+            "rate_limit": rate_limit_info,
         }
+        
+        # Log rate limit status
+        if rate_limit_info.get("remaining"):
+            logger.info(f"Rate limit status: {rate_limit_info['remaining']}/{rate_limit_info['limit']} requests remaining")
+        
+        return result
 
     except Exception as e:
         logger.error(f"Range sync failed: {e}", exc_info=True)
         return {"status": "error", "error": str(e)}
 
 
-def sync_single_user(session: Session, resources: Optional[List[str]] = None) -> Dict[str, Any]:
+def sync_single_user(session: Session, participant_id: str = "default", 
+                     resources: Optional[List[str]] = None, granularity: str = "1min") -> Dict[str, Any]:
     yesterday = date.today() - timedelta(days=1)
-    result = sync_date_range(session, yesterday, yesterday, resources=resources)
+    result = sync_date_range(session, yesterday, yesterday, participant_id=participant_id, 
+                            resources=resources, granularity=granularity)
 
     if result["status"] == "ok":
         result["date"] = yesterday.isoformat()
@@ -185,13 +265,14 @@ def export_data(
     start_date: date,
     end_date: date,
     format: str = "csv",
+    participant_id: str = "default",
     resources: Optional[List[str]] = None,
 ) -> str:
     resources = normalize_resources(resources or ALL_RESOURCES)
-    logger.info(f"Exporting data {start_date} -> {end_date} as {format} | resources={resources}")
+    logger.info(f"Exporting data for {participant_id}: {start_date} -> {end_date} as {format} | resources={resources}")
 
     data_root = resolve_path(DATA_DIR)
-    data_path = (data_root / "default").resolve()
+    data_path = (data_root / participant_id).resolve()
     export_dir = (data_root / "exports").resolve()
     export_dir.mkdir(parents=True, exist_ok=True)
 
@@ -219,7 +300,11 @@ def export_data(
 
         if "steps" in resources:
             steps_val = 0
-            steps_file = data_path / f"{date_str}_steps.json"
+            # Try summary file first (new naming), then old naming for backward compat
+            steps_file = data_path / f"{date_str}_steps_summary.json"
+            if not steps_file.exists():
+                steps_file = data_path / f"{date_str}_steps.json"
+            
             if steps_file.exists():
                 try:
                     with open(steps_file) as f:
@@ -232,7 +317,13 @@ def export_data(
 
         if "heartrate" in resources:
             resting_hr = None
-            hr_file = data_path / f"{date_str}_heartrate_1min.json"
+            # Try summary file first (new naming), then old naming
+            hr_file = data_path / f"{date_str}_heartrate_summary.json"
+            if not hr_file.exists():
+                hr_file = data_path / f"{date_str}_heartrate_1min.json"
+            if not hr_file.exists():
+                hr_file = data_path / f"{date_str}_heartrate.json"
+            
             if hr_file.exists():
                 try:
                     with open(hr_file) as f:
@@ -289,7 +380,7 @@ def export_data(
     df = pd.DataFrame(all_records)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"fitbit_export_{start_date}_{end_date}_{timestamp}.{format}"
+    filename = f"fitbit_export_{participant_id}_{start_date}_{end_date}_{timestamp}.{format}"
     output_path = (export_dir / filename).resolve()
 
     if format == "csv":

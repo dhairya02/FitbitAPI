@@ -6,9 +6,54 @@
 <div class="space-y-6">
     <!-- Page Header -->
     <div class="fade-in">
-        <h1 class="text-3xl font-bold text-gray-900">Fitbit Single-User Dashboard</h1>
-        <p class="mt-2 text-gray-600">Manage your Fitbit connection and sync your health data.</p>
+        <h1 class="text-3xl font-bold text-gray-900">Fitbit Multi-Participant Dashboard</h1>
+        <p class="mt-2 text-gray-600">Manage multiple participants and sync their Fitbit health data.</p>
     </div>
+    
+    <!-- Participant Selector / Welcome -->
+    {% if participants %}
+    <div class="fade-in bg-white rounded-lg shadow-md border border-gray-200 p-6">
+        <div class="flex items-center justify-between">
+            <div class="flex-1 mr-4">
+                <label for="participant_select" class="block text-sm font-medium text-gray-700 mb-2">Current Participant</label>
+                <select id="participant_select" onchange="window.location.href='/participants/select/' + this.value"
+                        class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
+                    {% for p in participants %}
+                    <option value="{{ p.participant_id }}" {% if p.participant_id == current_participant_id %}selected{% endif %}>
+                        {{ p.name or p.participant_id }} {% if p.name %}({{ p.participant_id }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mt-6">
+                <button onclick="document.getElementById('addParticipantModal').classList.remove('hidden')"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                    </svg>
+                    Add Participant
+                </button>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="fade-in bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border-2 border-blue-200 p-8 text-center">
+        <div class="max-w-2xl mx-auto">
+            <svg class="h-16 w-16 text-blue-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Welcome to Multi-Participant Fitbit Sync!</h2>
+            <p class="text-gray-600 mb-6">No participants yet. Get started by adding your first participant below.</p>
+            <button onclick="document.getElementById('addParticipantModal').classList.remove('hidden')"
+                    class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-lg">
+                <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                </svg>
+                Add Your First Participant
+            </button>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- Sync Status Alert -->
     {% if sync_status %}
@@ -59,6 +104,9 @@
     </div>
     {% endif %}
 
+    <!-- Only show content if participants exist -->
+    {% if participants %}
+    
     <!-- Connection Status Card -->
     <div class="fade-in bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
         <div class="px-6 py-5 border-b border-gray-200">
@@ -88,13 +136,20 @@
             
             <div class="mt-6 pt-6 border-t border-gray-200">
                 <dl class="space-y-3">
-                    <div class="flex justify-between">
-                        <dt class="text-sm font-medium text-gray-500">Fitbit User ID</dt>
-                        <dd class="text-sm text-gray-900 font-mono">{{ token.fitbit_user_id }}</dd>
+                    <div class="bg-blue-50 border border-blue-200 rounded p-3 mb-3">
+                        <p class="text-xs font-semibold text-blue-900 mb-1">📱 Connected Fitbit Account</p>
+                        <p class="text-sm text-blue-800">
+                            This participant is pulling data from the Fitbit account with User ID: 
+                            <span class="font-mono font-semibold">{{ token.fitbit_user_id }}</span>
+                        </p>
+                        <p class="text-xs text-blue-700 mt-1">
+                            This is whichever Fitbit account you logged into during the OAuth connection.
+                        </p>
                     </div>
+                    
                     <div class="flex justify-between">
                         <dt class="text-sm font-medium text-gray-500">Participant ID</dt>
-                        <dd class="text-sm text-gray-900">{{ token.participant_id }}</dd>
+                        <dd class="text-sm text-gray-900 font-semibold">{{ current_participant_id }}</dd>
                     </div>
                     <div class="flex justify-between">
                         <dt class="text-sm font-medium text-gray-500">Scopes</dt>
@@ -128,9 +183,16 @@
             </div>
             
             <div class="mt-6 pt-6 border-t border-gray-200">
-                <p class="text-sm text-gray-600">
-                    No Fitbit account is currently connected. Click the "Connect Fitbit" button below to authorize this app to access your Fitbit data.
-                </p>
+                <div class="bg-yellow-50 border border-yellow-200 rounded p-4">
+                    <p class="text-sm font-semibold text-yellow-900 mb-2">⚠️ Not Connected</p>
+                    <p class="text-sm text-yellow-800">
+                        Participant <span class="font-semibold">{{ current_participant_id }}</span> hasn't connected their Fitbit account yet.
+                    </p>
+                    <p class="text-xs text-yellow-700 mt-2">
+                        Click "Connect Fitbit" below and log in with <strong>this participant's</strong> Fitbit account 
+                        (their personal Fitbit username/password).
+                    </p>
+                </div>
             </div>
             {% endif %}
         </div>
@@ -142,105 +204,210 @@
             <h2 class="text-xl font-semibold text-gray-900">Actions</h2>
         </div>
         <div class="px-6 py-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {% if not token %}
-                <!-- Connect Button -->
-                <a href="{{ url_for('fitbit_authorize') }}" 
-                   class="inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+            {% if not token %}
+            <!-- Connect Button (when not connected) -->
+            <div>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <p class="text-sm font-semibold text-blue-900 mb-1">📝 Important:</p>
+                    <p class="text-sm text-blue-800">
+                        A popup will open for Fitbit login. Make sure to log in with 
+                        <strong>{{ current_participant_id }}'s Fitbit account</strong>, not your own or another participant's account.
+                    </p>
+                </div>
+                <button id="connectFitbitBtn" 
+                        data-authorize-url="{{ url_for('fitbit_authorize') }}"
+                        data-participant="{{ current_participant_id }}"
+                        class="inline-flex justify-center items-center w-full px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                     <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                     </svg>
-                    Connect Fitbit
-                </a>
-                {% else %}
-                <!-- Sync & Export Controls -->
-                <div class="col-span-1 md:col-span-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <h3 class="text-sm font-medium text-gray-900 mb-3">Sync & Export Data</h3>
-                    
-                    <form method="POST" action="{{ url_for('sync_now') }}" class="space-y-4" id="syncForm">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
-                                <input type="date" name="start_date" id="start_date" value="{{ default_date }}" required
-                                       class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
-                            </div>
-                            <div>
-                                <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
-                                <input type="date" name="end_date" id="end_date" value="{{ default_date }}" required
-                                       class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Data to include</label>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                                <div class="flex items-center">
-                                    <input id="res_all" name="resources" value="all" type="checkbox"
-                                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                           {% if 'all' in selected_resources %}checked{% endif %}>
-                                    <label for="res_all" class="ml-2 block text-sm text-gray-900">All Data</label>
-                                </div>
-                                {% for option in resource_options %}
-                                <div class="flex items-center">
-                                    <input id="res_{{ option.key }}" name="resources" value="{{ option.key }}" type="checkbox"
-                                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                           {% if option.key in selected_resources or 'all' in selected_resources %}checked{% endif %}>
-                                    <label for="res_{{ option.key }}" class="ml-2 block text-sm text-gray-900">{{ option.label }}</label>
-                                </div>
-                                {% endfor %}
-                            </div>
-                            <p class="mt-2 text-xs text-gray-500">Select specific data types or choose "All Data".</p>
-                        </div>
-
-                        <div class="flex flex-col sm:flex-row gap-3">
-                            <!-- Sync Button -->
-                            <button type="submit" name="action" value="sync"
-                                    class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                                </svg>
-                                Sync Date Range
-                            </button>
-                            
-                            <!-- Export CSV Button -->
-                            <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="csv"
-                                    class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
-                                <svg class="h-4 w-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                Export to CSV
-                            </button>
-                            
-                            <!-- Export Excel Button -->
-                            <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="xlsx"
-                                    class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                                <svg class="h-4 w-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                Export to Excel
-                            </button>
-                        </div>
-                    </form>
-                </div>
+                    Connect Fitbit for {{ current_participant_id }}
+                </button>
                 
-                <!-- Disconnect Button -->
-                <div class="col-span-1 md:col-span-2">
-                    <form method="POST" action="{{ url_for('disconnect') }}" class="w-full" 
-                          onsubmit="return confirm('Are you sure you want to disconnect your Fitbit account?');">
-                        <button type="submit" 
-                                class="w-full inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
-                            <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                            Disconnect
-                        </button>
-                    </form>
+                <!-- OAuth Popup Loading Indicator -->
+                <div id="oauthLoading" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div class="flex items-center">
+                        <svg class="animate-spin h-5 w-5 text-blue-600 mr-3" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span class="text-sm font-medium text-blue-900">Waiting for Fitbit authorization...</span>
+                    </div>
+                    <p class="text-xs text-blue-700 mt-2">Please complete the login in the popup window.</p>
                 </div>
+            </div>
+            {% else %}
+            <!-- Sync & Export Form (when connected) -->
+            <form method="POST" action="{{ url_for('sync_now') }}" class="space-y-4" id="syncForm">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                        <input type="date" name="start_date" id="start_date" value="{{ default_date }}" required
+                               class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
+                    </div>
+                    <div>
+                        <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
+                        <input type="date" name="end_date" id="end_date" value="{{ default_date }}" required
+                               class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Data to Include</label>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                        <div class="flex items-center">
+                            <input id="res_all" name="resources" value="all" type="checkbox"
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                   {% if 'all' in selected_resources %}checked{% endif %}>
+                            <label for="res_all" class="ml-2 block text-sm font-semibold text-gray-900">All Data</label>
+                        </div>
+                        {% for option in resource_options %}
+                        <div class="flex items-center">
+                            <input id="res_{{ option.key }}" name="resources" value="{{ option.key }}" type="checkbox"
+                                   class="resource-checkbox h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                   {% if option.key in selected_resources or 'all' in selected_resources %}checked{% endif %}>
+                            <label for="res_{{ option.key }}" class="ml-2 block text-sm text-gray-900">{{ option.label }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500">Select specific data types or choose "All Data".</p>
+                </div>
+
+                <div>
+                    <label for="granularity" class="block text-sm font-medium text-gray-700 mb-2">
+                        Intraday Data Granularity
+                        <span class="text-xs text-gray-500">(for Steps & Heart Rate)</span>
+                    </label>
+                    <select name="granularity" id="granularity"
+                            class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
+                        <option value="1min">1 minute (most detailed, larger files)</option>
+                        <option value="5min">5 minutes (good balance)</option>
+                        <option value="15min" selected>15 minutes (smaller files)</option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Lower granularity = more data points. Use 15min to reduce file size and API calls.
+                    </p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <button type="submit" id="syncButton"
+                            class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span id="syncButtonText">Sync Date Range</span>
+                    </button>
+                    
+                    <button type="button" id="stopSyncButton" class="hidden inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors">
+                        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
+                        </svg>
+                        Stop Sync
+                    </button>
+                    
+                    <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="csv"
+                            class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                        <svg class="h-4 w-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Export to CSV
+                    </button>
+                    
+                    <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="xlsx"
+                            class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                        <svg class="h-4 w-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                        </svg>
+                        Export to Excel
+                    </button>
+                </div>
+            </form>
+            
+            <!-- Progress Indicator (hidden by default) -->
+            <div id="syncProgress" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div class="flex items-center mb-2">
+                    <svg class="animate-spin h-5 w-5 text-blue-600 mr-3" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="text-sm font-medium text-blue-900">Syncing data...</span>
+                </div>
+                <div class="w-full bg-blue-200 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <p class="text-xs text-blue-800 mt-2" id="progressText">Preparing to sync...</p>
+            </div>
+            
+            <!-- Disconnect Button -->
+            <div class="mt-4 pt-4 border-t">
+                <form method="POST" action="{{ url_for('disconnect') }}" 
+                      onsubmit="return confirm('Are you sure you want to disconnect this Fitbit account?');">
+                    <button type="submit" 
+                            class="w-full inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                        </svg>
+                        Disconnect
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Rate Limit Status Card -->
+    {% if rate_limit_info and rate_limit_info.remaining %}
+    <div class="fade-in bg-white rounded-lg shadow-md border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-3">API Rate Limit Status</h3>
+        {% set remaining = rate_limit_info.remaining | int %}
+        {% set limit = rate_limit_info.limit | int %}
+        {% set percentage = (remaining / limit * 100) | int %}
+        
+        <div class="space-y-3">
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-gray-700">Requests Remaining</span>
+                <span class="text-2xl font-bold 
+                    {% if percentage > 50 %}text-green-600
+                    {% elif percentage > 20 %}text-yellow-600
+                    {% else %}text-red-600{% endif %}">
+                    {{ remaining }}/{{ limit }}
+                </span>
+            </div>
+            
+            <div class="w-full bg-gray-200 rounded-full h-3">
+                <div id="rateLimitBar" class="h-3 rounded-full transition-all duration-300
+                    {% if percentage > 50 %}bg-green-500
+                    {% elif percentage > 20 %}bg-yellow-500
+                    {% else %}bg-red-500{% endif %}"
+                    data-percentage="{{ percentage }}">
+                </div>
+            </div>
+            <script>
+            // Set width from data attribute to avoid CSS linting issues
+            const rateLimitBar = document.getElementById('rateLimitBar');
+            if (rateLimitBar) {
+                const percentage = rateLimitBar.getAttribute('data-percentage');
+                rateLimitBar.style.width = percentage + '%';
+            }
+            </script>
+            
+            <div class="text-xs text-gray-600">
+                {% if percentage > 50 %}
+                <p>✅ Plenty of API quota available. You can sync large date ranges.</p>
+                {% elif percentage > 20 %}
+                <p>⚠️ Getting low on API quota. Consider syncing smaller ranges or waiting a bit.</p>
+                {% else %}
+                <p>🔴 Very low API quota! Sync only 1-2 days at a time or wait for reset.</p>
+                {% endif %}
+                {% if rate_limit_info.reset_time %}
+                <p class="mt-1">Rate limit resets at: <span class="font-mono">{{ rate_limit_info.reset_time }}</span></p>
                 {% endif %}
             </div>
         </div>
     </div>
-
+    {% endif %}
+    
     <!-- Information Card -->
     <div class="fade-in bg-blue-50 rounded-lg border border-blue-200 p-6">
         <div class="flex items-start">
@@ -253,13 +420,215 @@
                 <h3 class="text-sm font-medium text-blue-900">About Data Sync & Export</h3>
                 <div class="mt-2 text-sm text-blue-800">
                     <ul class="list-disc list-inside mt-2 space-y-1 ml-4">
-                        <li><strong>Sync Date Range:</strong> Pulls steps and intraday heart rate for every day in the selected range.</li>
-                        <li><strong>Export to CSV/Excel:</strong> Creates a file aggregating daily steps and resting heart rate for the selected range.</li>
-                        <li>Data is saved in <code class="bg-blue-100 px-1 rounded">fitbit_data/default/</code> (JSON) and <code class="bg-blue-100 px-1 rounded">fitbit_data/exports/</code> (CSV/Excel).</li>
+                        <li><strong>Sync Date Range:</strong> Pulls selected data types for every day in the range.</li>
+                        <li><strong>Export to CSV/Excel:</strong> Creates a file with the selected data for the range.</li>
+                        <li>Data is saved in <code class="bg-blue-100 px-1 rounded">fitbit_data/{{ current_participant_id }}/</code> (JSON) and <code class="bg-blue-100 px-1 rounded">fitbit_data/exports/</code> (CSV/Excel).</li>
+                        <li><strong>Tip:</strong> Fitbit limits to 150 requests/hour. Use 15-min granularity and smaller date ranges to stay under limits.</li>
                     </ul>
                 </div>
             </div>
         </div>
     </div>
+    
+    {% endif %}
 </div>
+
+<!-- Add Participant Modal -->
+<div id="addParticipantModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Add New Participant</h3>
+            <form method="POST" action="{{ url_for('add_participant') }}" class="space-y-4">
+                <div>
+                    <label for="participant_id" class="block text-sm font-medium text-gray-700">Participant ID *</label>
+                    <input type="text" name="participant_id" id="participant_id" required
+                           class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border"
+                           placeholder="e.g., P001, P002">
+                </div>
+                <div>
+                    <label for="name" class="block text-sm font-medium text-gray-700">Display Name</label>
+                    <input type="text" name="name" id="name"
+                           class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border"
+                           placeholder="e.g., John Doe">
+                </div>
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                    <input type="email" name="email" id="email"
+                           class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border"
+                           placeholder="participant@example.com">
+                </div>
+                <div>
+                    <label for="notes" class="block text-sm font-medium text-gray-700">Notes</label>
+                    <textarea name="notes" id="notes" rows="2"
+                              class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border"
+                              placeholder="Optional notes"></textarea>
+                </div>
+                
+                <div class="flex items-center justify-end space-x-3 pt-4 border-t">
+                    <button type="button" onclick="document.getElementById('addParticipantModal').classList.add('hidden')"
+                            class="px-4 py-2 bg-gray-200 text-gray-800 text-sm font-medium rounded-md hover:bg-gray-300 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors">
+                        Add Participant
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Close modal when clicking outside
+document.getElementById('addParticipantModal').addEventListener('click', function(e) {
+    if (e.target === this) {
+        this.classList.add('hidden');
+    }
+});
+
+// OAuth Popup Handler
+let oauthWindow = null;
+let oauthCheckInterval = null;
+
+function openFitbitOAuth(authorizeUrl, participantId) {
+    const loadingDiv = document.getElementById('oauthLoading');
+    if (loadingDiv) {
+        loadingDiv.classList.remove('hidden');
+    }
+    
+    const width = 600;
+    const height = 700;
+    const left = (screen.width - width) / 2;
+    const top = (screen.height - height) / 2;
+    
+    oauthWindow = window.open(
+        authorizeUrl,
+        'FitbitOAuth',
+        'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
+    );
+    
+    if (!oauthWindow) {
+        alert('Popup was blocked! Please allow popups for this site and try again.');
+        if (loadingDiv) {
+            loadingDiv.classList.add('hidden');
+        }
+        return;
+    }
+    
+    oauthCheckInterval = setInterval(function() {
+        if (oauthWindow.closed) {
+            clearInterval(oauthCheckInterval);
+            if (loadingDiv) {
+                loadingDiv.classList.add('hidden');
+            }
+            window.location.reload();
+        }
+    }, 500);
+}
+
+// Attach to connect button
+const connectBtn = document.getElementById('connectFitbitBtn');
+if (connectBtn) {
+    connectBtn.addEventListener('click', function() {
+        const url = this.getAttribute('data-authorize-url');
+        const participant = this.getAttribute('data-participant');
+        openFitbitOAuth(url, participant);
+    });
+}
+
+// Handle OAuth callback in popup (closes popup and notifies parent)
+if (window.opener && window.location.pathname.includes('/fitbit/callback')) {
+    // We're in the popup window after OAuth callback
+    setTimeout(function() {
+        window.close();
+    }, 2000); // Close after 2 seconds to show success message
+}
+
+// Resource selection: "All Data" toggles all checkboxes
+document.addEventListener('DOMContentLoaded', function() {
+    const allToggle = document.getElementById('res_all');
+    const resourceToggles = Array.from(document.querySelectorAll('.resource-checkbox'));
+    
+    if (allToggle) {
+        // When "All Data" is toggled, check/uncheck all resources
+        allToggle.addEventListener('change', function() {
+            resourceToggles.forEach(cb => cb.checked = this.checked);
+        });
+        
+        // When any resource is unchecked, uncheck "All Data"
+        // When all resources are checked, check "All Data"
+        resourceToggles.forEach(cb => {
+            cb.addEventListener('change', function() {
+                const allChecked = resourceToggles.every(c => c.checked);
+                allToggle.checked = allChecked;
+            });
+        });
+    }
+    
+    // Sync progress indicator with stop functionality
+    const syncForm = document.getElementById('syncForm');
+    const syncButton = document.getElementById('syncButton');
+    const stopButton = document.getElementById('stopSyncButton');
+    let progressInterval = null;
+    let isSyncing = false;
+    
+    if (syncForm && syncButton) {
+        syncForm.addEventListener('submit', function(e) {
+            const startDate = document.getElementById('start_date').value;
+            const endDate = document.getElementById('end_date').value;
+            
+            if (startDate && endDate) {
+                // Calculate number of days
+                const start = new Date(startDate);
+                const end = new Date(endDate);
+                const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+                
+                // Warn if large range
+                if (days > 7) {
+                    const proceed = confirm(`You're syncing ${days} days. This may hit rate limits and take several minutes. Continue?`);
+                    if (!proceed) {
+                        e.preventDefault();
+                        return;
+                    }
+                }
+                
+                // Show progress indicator
+                isSyncing = true;
+                document.getElementById('syncProgress').classList.remove('hidden');
+                syncButton.disabled = true;
+                stopButton.classList.remove('hidden');
+                document.getElementById('syncButtonText').textContent = 'Syncing...';
+                document.getElementById('progressText').textContent = `Syncing ${days} day(s)... Estimated time: ${days} seconds`;
+                
+                // Simulate progress (since we can't get real-time updates from Flask POST)
+                let progress = 0;
+                let elapsed = 0;
+                progressInterval = setInterval(() => {
+                    elapsed++;
+                    progress = Math.min(95, (elapsed / days) * 100);
+                    document.getElementById('progressBar').style.width = progress + '%';
+                    document.getElementById('progressText').textContent = `Syncing ${days} day(s)... ${Math.floor(progress)}% complete`;
+                }, 1000);
+            }
+        });
+        
+        // Stop button handler
+        if (stopButton) {
+            stopButton.addEventListener('click', function() {
+                if (confirm('Are you sure you want to stop syncing? Partial data may be saved.')) {
+                    // Stop the progress animation
+                    if (progressInterval) {
+                        clearInterval(progressInterval);
+                    }
+                    
+                    // Reload page to cancel (will abort the POST request)
+                    window.location.href = '/?sync_status=warning&sync_message=Sync cancelled by user';
+                }
+            });
+        }
+    }
+});
+</script>
+
 {% endblock %}
