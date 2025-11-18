@@ -7,7 +7,7 @@ FITBIT_CLIENT_SECRET=your_client_secret_here
 
 # OAuth Settings (Optional - these are the defaults)
 FITBIT_REDIRECT_URI=http://localhost:5000/fitbit/callback
-FITBIT_SCOPES=activity heartrate sleep weight profile
+FITBIT_SCOPES="activity heartrate sleep weight profile"
 
 # Flask Settings (Optional)
 FLASK_SECRET_KEY=change-this-to-a-long-random-string
