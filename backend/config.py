@@ -34,6 +34,11 @@ DATA_DIR = os.getenv("FITBIT_DATA_DIR", "fitbit_data")
 
 # Flask configuration
 FLASK_HOST = os.getenv("FLASK_HOST", "127.0.0.1")
-FLASK_PORT = int(os.getenv("FLASK_PORT", "5000"))
+FLASK_PORT = int(os.getenv("FLASK_PORT", "8000"))
 FLASK_DEBUG = os.getenv("FLASK_DEBUG", "True").lower() in ("true", "1", "yes")
+
+# Logging configuration
+LOG_DIR = os.getenv("LOG_DIR", "logs")
+LOG_FILE = os.getenv("LOG_FILE", "fitbit_app.log")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 

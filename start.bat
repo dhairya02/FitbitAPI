@@ -136,8 +136,8 @@ REM Start the Flask application
 echo Starting Flask application...
 echo.
 echo Server will be available at:
-echo   Dashboard: http://localhost:5000/
-echo   Help:      http://localhost:5000/help
+echo   Dashboard: http://localhost:8000/
+echo   Help:      http://localhost:8000/help
 echo.
 echo Press Ctrl+C to stop the server
 echo.
