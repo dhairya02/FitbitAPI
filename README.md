@@ -300,6 +300,13 @@ The sync process:
 2. Click "Connect Fitbit" to re-authorize
 3. Try syncing again
 
+## Legal / Policy Links
+
+- [Terms of Service](docs/terms.md)
+- [Privacy Policy](docs/privacy.md)
+
+The Markdown files above can be viewed directly on GitHub (or any static hosting service). Copy their public URLs into the **Terms of Service URL** and **Privacy Policy URL** fields when configuring your Fitbit Developer Portal application.
+
 ## 🔮 Future Extensions: Multi-User Support
 
 This app is designed for easy extension to multiple users. Here's what would need to change:
