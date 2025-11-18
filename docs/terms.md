@@ -24,4 +24,4 @@ The Application is provided on a research and "as-is" basis. We make no represen
 The Application and these Terms may be updated from time to time. Any changes will take effect when the revised Terms are posted at this URL. Continued use of the Application after updates indicates acceptance of the revised Terms.
 
 ## Contact Information
-For questions about this Application or these Terms, contact the study team or system administrator at [INSERT CONTACT EMAIL].
+For questions about this Application or these Terms, contact the study team or system administrator at dhairyaanil.upadhyay@nyulangone.org.
