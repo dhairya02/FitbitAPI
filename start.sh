@@ -65,7 +65,12 @@ echo -e "${YELLOW}Checking environment variables...${NC}"
 # Load .env file if it exists
 if [ -f ".env" ]; then
     echo -e "${GREEN}Found .env file, loading variables...${NC}"
-    export $(cat .env | grep -v '^#' | xargs)
+    # Use a more robust method to load .env file
+    set -a
+    source .env
+    set +a
+elif [ -f "env-example.txt" ]; then
+    echo -e "${YELLOW}No .env file found. You can copy env-example.txt to .env and fill in your values.${NC}"
 fi
 
 MISSING_VARS=()
