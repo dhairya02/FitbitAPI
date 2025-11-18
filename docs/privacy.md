@@ -42,4 +42,4 @@ Data is retained for as long as necessary to conduct research analyses, fulfill 
 This Privacy Policy may be updated periodically. The most current version will always be available at this URL, and continued use of the Application signifies acceptance of any updates.
 
 ## Contact Information
-For questions about this Privacy Policy or how your data is used, please contact the study team or system administrator at [INSERT CONTACT EMAIL].
+For questions about this Privacy Policy or how your data is used, please contact the study team or system administrator at dhairyaanil.upadhyay@nyulangone.org.
