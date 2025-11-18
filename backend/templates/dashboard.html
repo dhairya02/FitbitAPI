@@ -153,28 +153,68 @@
                     Connect Fitbit
                 </a>
                 {% else %}
-                <!-- Sync Button -->
-                <form method="POST" action="{{ url_for('sync_now') }}" class="w-full">
-                    <button type="submit" 
-                            class="w-full inline-flex justify-center items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
-                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                        </svg>
-                        Sync Data Now
-                    </button>
-                </form>
+                <!-- Sync & Export Controls -->
+                <div class="col-span-1 md:col-span-2 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 class="text-sm font-medium text-gray-900 mb-3">Sync & Export Data</h3>
+                    
+                    <form method="POST" action="{{ url_for('sync_now') }}" class="space-y-4" id="syncForm">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                                <input type="date" name="start_date" id="start_date" value="{{ default_date }}" required
+                                       class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
+                            </div>
+                            <div>
+                                <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
+                                <input type="date" name="end_date" id="end_date" value="{{ default_date }}" required
+                                       class="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md p-2 border">
+                            </div>
+                        </div>
+
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <!-- Sync Button -->
+                            <button type="submit" name="action" value="sync"
+                                    class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                </svg>
+                                Sync Date Range
+                            </button>
+                            
+                            <!-- Export CSV Button -->
+                            <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="csv"
+                                    class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                                <svg class="h-4 w-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                Export to CSV
+                            </button>
+                            
+                            <!-- Export Excel Button -->
+                            <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="xlsx"
+                                    class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                                <svg class="h-4 w-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                Export to Excel
+                            </button>
+                        </div>
+                    </form>
+                </div>
                 
                 <!-- Disconnect Button -->
-                <form method="POST" action="{{ url_for('disconnect') }}" class="w-full" 
-                      onsubmit="return confirm('Are you sure you want to disconnect your Fitbit account?');">
-                    <button type="submit" 
-                            class="w-full inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
-                        <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                        Disconnect
-                    </button>
-                </form>
+                <div class="col-span-1 md:col-span-2">
+                    <form method="POST" action="{{ url_for('disconnect') }}" class="w-full" 
+                          onsubmit="return confirm('Are you sure you want to disconnect your Fitbit account?');">
+                        <button type="submit" 
+                                class="w-full inline-flex justify-center items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                            <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                            Disconnect
+                        </button>
+                    </form>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -189,14 +229,12 @@
                 </svg>
             </div>
             <div class="ml-3">
-                <h3 class="text-sm font-medium text-blue-900">About Data Sync</h3>
+                <h3 class="text-sm font-medium text-blue-900">About Data Sync & Export</h3>
                 <div class="mt-2 text-sm text-blue-800">
-                    <p>When you click "Sync Data Now", the app will:</p>
                     <ul class="list-disc list-inside mt-2 space-y-1 ml-4">
-                        <li>Pull yesterday's step count summary</li>
-                        <li>Pull yesterday's heart rate intraday data (1-minute resolution)</li>
-                        <li>Save the data as JSON files in the <code class="bg-blue-100 px-1 rounded">fitbit_data/default/</code> directory</li>
-                        <li>Automatically refresh your access token if needed</li>
+                        <li><strong>Sync Date Range:</strong> Pulls steps and intraday heart rate for every day in the selected range.</li>
+                        <li><strong>Export to CSV/Excel:</strong> Creates a file aggregating daily steps and resting heart rate for the selected range.</li>
+                        <li>Data is saved in <code class="bg-blue-100 px-1 rounded">fitbit_data/default/</code> (JSON) and <code class="bg-blue-100 px-1 rounded">fitbit_data/exports/</code> (CSV/Excel).</li>
                     </ul>
                 </div>
             </div>
@@ -204,4 +242,3 @@
     </div>
 </div>
 {% endblock %}
-

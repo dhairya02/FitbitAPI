@@ -7,8 +7,9 @@ import sys
 import webbrowser
 import threading
 import time
+from datetime import date, timedelta
 from pathlib import Path
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_file
 from fitbit.api import FitbitOauth2Client
 from sqlalchemy.orm import Session as DBSession
 
@@ -26,7 +27,7 @@ from backend.config import (
     LOG_LEVEL,
 )
 from backend.db import init_db, SessionLocal, get_single_token, upsert_single_token
-from backend.sync_logic import sync_single_user
+from backend.sync_logic import sync_single_user, sync_date_range, export_data
 
 # Configure logging
 log_dir = Path(LOG_DIR)
@@ -107,12 +108,16 @@ def dashboard():
         else:
             logger.debug("No user connected")
         
+        # Default dates for the date picker (yesterday)
+        yesterday = date.today() - timedelta(days=1)
+        
         return render_template(
             "dashboard.html",
             token=token,
             sync_status=sync_status,
             sync_message=sync_message,
             sync_date=sync_date,
+            default_date=yesterday.isoformat(),
         )
     except Exception as e:
         logger.error(f"Error loading dashboard: {e}", exc_info=True)
@@ -250,16 +255,30 @@ def fitbit_callback():
 def sync_now():
     """
     Trigger data sync for the connected user.
-    Supports both JSON responses (for fetch calls) and HTML redirects (for form posts).
+    Now supports date range syncing via form parameters.
     """
     logger.info("Data sync triggered")
     db = get_db()
+    
+    # Get date range from form if available
+    start_str = request.form.get("start_date")
+    end_str = request.form.get("end_date")
+    
     try:
-        result = sync_single_user(db)
-        
+        if start_str and end_str:
+            # Date range sync
+            start_date = date.fromisoformat(start_str)
+            end_date = date.fromisoformat(end_str)
+            result = sync_date_range(db, start_date, end_date)
+            success_msg = f"Synced {result.get('count', 0)} days from {start_str} to {end_str}"
+        else:
+            # Fallback to single day (yesterday) sync
+            result = sync_single_user(db)
+            success_msg = f"Successfully synced data for {result.get('date')}"
+
         # Log result
         if result["status"] == "ok":
-            logger.info(f"Sync successful for date: {result['date']}")
+            logger.info(success_msg)
         elif result["status"] == "no_token":
             logger.warning("Sync attempted but no token found")
         else:
@@ -275,8 +294,8 @@ def sync_now():
                 url_for(
                     "dashboard",
                     sync_status="success",
-                    sync_message=f"Successfully synced data for {result['date']}",
-                    sync_date=result["date"],
+                    sync_message=success_msg,
+                    sync_date=f"{start_str} to {end_str}" if start_str else result.get("date"),
                 )
             )
         elif result["status"] == "no_token":
@@ -300,6 +319,37 @@ def sync_now():
         raise
     finally:
         db.close()
+
+
+@app.route("/export", methods=["POST"])
+def export_data_route():
+    """
+    Export synced data to CSV or Excel.
+    """
+    logger.info("Export requested")
+    
+    start_str = request.form.get("start_date")
+    end_str = request.form.get("end_date")
+    format_type = request.form.get("format", "csv")
+    
+    if not start_str or not end_str:
+        return redirect(url_for("dashboard", sync_status="error", sync_message="Please select a date range for export."))
+        
+    try:
+        start_date = date.fromisoformat(start_str)
+        end_date = date.fromisoformat(end_str)
+        
+        file_path = export_data(start_date, end_date, format_type)
+        
+        return send_file(
+            file_path,
+            as_attachment=True,
+            download_name=Path(file_path).name
+        )
+        
+    except Exception as e:
+        logger.error(f"Export failed: {e}", exc_info=True)
+        return redirect(url_for("dashboard", sync_status="error", sync_message=f"Export failed: {e}"))
 
 
 @app.route("/disconnect", methods=["POST"])
@@ -411,4 +461,3 @@ if __name__ == "__main__":
         raise
     finally:
         logger.info("Server shutdown")
-
