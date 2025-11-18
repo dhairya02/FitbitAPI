@@ -66,6 +66,29 @@ Ensure your app has access to these data scopes (usually granted by default):
 
 ## 🚀 Installation & Setup
 
+### Quick Start (Recommended)
+
+**For macOS/Linux:**
+```bash
+./start.sh
+```
+
+**For Windows:**
+```cmd
+start.bat
+```
+
+The startup script will automatically:
+- Check Python installation
+- Create and activate a virtual environment
+- Install all dependencies
+- Verify required environment variables
+- Start the Flask application
+
+### Manual Setup
+
+If you prefer to set up manually:
+
 ### 1. Clone or Download This Project
 
 ```bash
@@ -122,6 +145,13 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ### 5. Run the Application
 
+**Option A: Use the startup script (easiest)**
+```bash
+./start.sh        # macOS/Linux
+start.bat         # Windows
+```
+
+**Option B: Run manually**
 ```bash
 python -m backend.app
 ```

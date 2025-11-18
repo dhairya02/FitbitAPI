@@ -4,6 +4,22 @@ Get your Fitbit data sync app running in 5 minutes!
 
 ## ⚡ Fast Setup
 
+### Option 1: Use the Startup Script (Easiest)
+
+**macOS/Linux:**
+```bash
+./start.sh
+```
+
+**Windows:**
+```cmd
+start.bat
+```
+
+The script handles everything automatically! Just make sure you have your Fitbit credentials ready.
+
+### Option 2: Manual Setup
+
 ### 1. Install Dependencies
 
 ```bash
@@ -40,6 +56,13 @@ export FLASK_SECRET_KEY="random-string"
 
 ### 4. Run the App
 
+**Using startup script:**
+```bash
+./start.sh        # macOS/Linux
+start.bat         # Windows
+```
+
+**Or manually:**
 ```bash
 python -m backend.app
 ```
