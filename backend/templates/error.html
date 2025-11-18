@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Fitbit Sync{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="fade-in bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden">
+        <!-- Error Icon -->
+        <div class="bg-red-50 px-6 py-8 border-b border-red-100">
+            <div class="flex justify-center">
+                <div class="h-16 w-16 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg class="h-10 w-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                </div>
+            </div>
+            <h1 class="mt-4 text-2xl font-bold text-red-900 text-center">{{ title }}</h1>
+        </div>
+        
+        <!-- Error Message Content -->
+        <div class="px-6 py-8">
+            <div class="space-y-4">
+                <p class="text-lg text-gray-700 text-center">{{ message }}</p>
+                
+                {% if details %}
+                <div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                    <p class="text-sm font-semibold text-gray-900 mb-2">Details:</p>
+                    <p class="text-sm text-gray-700 font-mono break-words">{{ details }}</p>
+                </div>
+                {% endif %}
+                
+                <!-- Helpful Tips -->
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
+                    <p class="text-sm font-semibold text-blue-900 mb-2">💡 What you can do:</p>
+                    <ul class="text-sm text-blue-800 space-y-1 list-disc list-inside ml-2">
+                        <li>Check the Help & Setup page for configuration instructions</li>
+                        <li>Verify your environment variables are set correctly</li>
+                        <li>Try disconnecting and reconnecting your Fitbit account</li>
+                        <li>Check your Fitbit app settings in the Developer Portal</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="mt-8 flex justify-center space-x-4">
+                <a href="{{ url_for('dashboard') }}" 
+                   class="inline-flex items-center px-6 py-3 border border-gray-300 text-base font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors">
+                    <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                    </svg>
+                    Back to Dashboard
+                </a>
+                <a href="{{ url_for('help_page') }}" 
+                   class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                    <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    View Help
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
