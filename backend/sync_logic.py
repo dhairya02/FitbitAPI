@@ -85,10 +85,9 @@ def sync_date_range(
     end_date: date,
     participant_id: str = "default",
     resources: Optional[List[str]] = None,
-    granularity: str = "1min",
 ) -> Dict[str, Any]:
     resources = normalize_resources(resources)
-    logger.info(f"Starting date range sync for {participant_id}: {start_date} to {end_date}, resources={resources}, granularity={granularity}")
+    logger.info(f"Starting date range sync for {participant_id}: {start_date} to {end_date}, resources={resources}")
 
     token = get_token_for_participant(session, participant_id)
     if not token:
@@ -128,7 +127,7 @@ def sync_date_range(
                 if "steps" in resources:
                     # Daily summary
                     steps = fb.time_series("activities/steps", base_date=date_str, period="1d")
-                    with open(data_path / f"{date_str}_steps_summary.json", "w") as f:
+                    with open(data_path / f"{date_str}_steps.json", "w") as f:
                         json.dump(steps, f, indent=2)
                     
                     # Try to extract rate limit info from the client's last response
@@ -141,47 +140,16 @@ def sync_date_range(
                                 rate_limit_info['reset_time'] = last_response.headers.get('Fitbit-Rate-Limit-Reset')
                     except Exception:
                         pass
-                    
-                    # Intraday data - use correct API method with time range
-                    try:
-                        steps_intraday = fb.intraday_time_series(
-                            resource="activities/steps",
-                            base_date=date_str,
-                            detail_level=granularity,
-                            start_time="00:00",
-                            end_time="23:59"
-                        )
-                        with open(data_path / f"{date_str}_steps_intraday_{granularity}.json", "w") as f:
-                            json.dump(steps_intraday, f, indent=2)
-                        logger.debug(f"Steps intraday ({granularity}) saved for {date_str}")
-                    except Exception as steps_intra_error:
-                        logger.warning(f"Failed to fetch steps intraday for {date_str}: {steps_intra_error}")
-                        # Continue even if intraday fails
 
                 if "heartrate" in resources:
                     # Daily summary
                     try:
                         hr_summary = fb.time_series("activities/heart", base_date=date_str, period="1d")
-                        with open(data_path / f"{date_str}_heartrate_summary.json", "w") as f:
+                        with open(data_path / f"{date_str}_heartrate.json", "w") as f:
                             json.dump(hr_summary, f, indent=2)
-                    except Exception:
-                        pass
-                    
-                    # Intraday data - use correct API method with time range
-                    try:
-                        hr_intraday = fb.intraday_time_series(
-                            resource="activities/heart",
-                            base_date=date_str,
-                            detail_level=granularity,
-                            start_time="00:00",
-                            end_time="23:59"
-                        )
-                        with open(data_path / f"{date_str}_heartrate_intraday_{granularity}.json", "w") as f:
-                            json.dump(hr_intraday, f, indent=2)
-                        logger.debug(f"Heart rate intraday ({granularity}) saved for {date_str}")
                     except Exception as hr_error:
-                        logger.warning(f"Failed to fetch heart rate intraday for {date_str}: {hr_error}")
-                        errors.append(f"{date_str} HR Intraday: {hr_error}")
+                        logger.warning(f"Failed to fetch heart rate for {date_str}: {hr_error}")
+                        errors.append(f"{date_str} HR: {hr_error}")
 
                 if "sleep" in resources:
                     try:
@@ -246,10 +214,10 @@ def sync_date_range(
 
 
 def sync_single_user(session: Session, participant_id: str = "default", 
-                     resources: Optional[List[str]] = None, granularity: str = "1min") -> Dict[str, Any]:
+                     resources: Optional[List[str]] = None) -> Dict[str, Any]:
     yesterday = date.today() - timedelta(days=1)
     result = sync_date_range(session, yesterday, yesterday, participant_id=participant_id, 
-                            resources=resources, granularity=granularity)
+                            resources=resources)
 
     if result["status"] == "ok":
         result["date"] = yesterday.isoformat()

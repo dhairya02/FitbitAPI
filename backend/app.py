@@ -358,7 +358,6 @@ def sync_now():
 
     start_str = request.form.get("start_date")
     end_str = request.form.get("end_date")
-    granularity = request.form.get("granularity", "1min")
     raw_resources = get_selected_resources(request.form.getlist("resources"))
     effective_resources = normalize_resources(raw_resources)
 
@@ -367,11 +366,10 @@ def sync_now():
             start_date = date.fromisoformat(start_str)
             end_date = date.fromisoformat(end_str)
             result = sync_date_range(db, start_date, end_date, participant_id=current_pid, 
-                                    resources=effective_resources, granularity=granularity)
-            success_msg = f"Synced {result.get('count', 0)} days for {current_pid} ({granularity} granularity)"
+                                    resources=effective_resources)
+            success_msg = f"Synced {result.get('count', 0)} days for {current_pid}"
         else:
-            result = sync_single_user(db, participant_id=current_pid, resources=effective_resources, 
-                                     granularity=granularity)
+            result = sync_single_user(db, participant_id=current_pid, resources=effective_resources)
             success_msg = f"Successfully synced data for {current_pid} on {result.get('date')}"
 
         # Store rate limit info in session for display

@@ -30,32 +30,94 @@
             
             <!-- Action Buttons -->
             <div class="mt-8 flex justify-center space-x-4">
-                <a href="{{ url_for('dashboard') }}" 
-                   class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                <button onclick="finishAndClose()"
+                   class="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors cursor-pointer">
                     <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                     </svg>
                     Go to Dashboard
-                </a>
+                </button>
             </div>
             
-            <!-- Auto-close if in popup -->
+            <!-- Navigation handler and auto-close if in popup -->
             <script>
-            if (window.opener) {
-                // We're in a popup - show message and auto-close
+            function finishAndClose() {
+                console.log('[Popup] finishAndClose called');
+                // Method 1: Try window.opener directly
+                try {
+                    if (window.opener && !window.opener.closed) {
+                        console.log('[Popup] window.opener available, reloading parent');
+                        window.opener.location.reload();
+                        window.close();
+                        return;
+                    }
+                } catch (e) {
+                    console.log('[Popup] opener access failed:', e);
+                }
+                
+                // Method 2: Use localStorage to signal parent
+                try {
+                    console.log('[Popup] Signaling success via localStorage');
+                    localStorage.setItem('fitbit_oauth_success', Date.now().toString());
+                    setTimeout(() => window.close(), 500);
+                } catch (e) {
+                    console.log('[Popup] localStorage signal failed:', e);
+                }
+                
+                // Fallback: if we are still here, we might be the main window
+                if (!window.opener) {
+                    console.log('[Popup] No opener detected, navigating self to dashboard');
+                    window.location.href = '{{ url_for("dashboard") }}';
+                } else {
+                    // We are a popup but stranded
+                    console.log('[Popup] Opener exists but inaccessible, closing window');
+                    window.close();
+                }
+            }
+            
+            // Bind to the button
+            window.finishAndClose = finishAndClose;
+            
+            // Auto-handle popup
+            if (window.opener && !window.opener.closed) {
+                console.log('[Popup] In popup context after Fitbit auth');
+                // Signal parent immediately via localStorage
+                try {
+                    localStorage.setItem('fitbit_oauth_success', Date.now().toString());
+                    console.log('[Popup] localStorage success signal sent');
+                } catch (e) {
+                    console.log('[Popup] Failed to write success signal:', e);
+                }
+                
+                // We're in a popup - show simplified message
                 document.body.innerHTML = `
-                    <div style="display: flex; align-items: center; justify-center; height: 100vh; flex-direction: column; font-family: sans-serif;">
+                    <div style="display: flex; align-items: center; justify-center; height: 100vh; flex-direction: column; font-family: sans-serif; background: #f9fafb;">
                         <div style="text-align: center; padding: 40px; background: #f0fdf4; border: 2px solid #86efac; border-radius: 12px; max-width: 400px;">
                             <svg style="width: 64px; height: 64px; margin: 0 auto 20px; color: #16a34a;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                             <h2 style="color: #15803d; font-size: 24px; font-weight: bold; margin-bottom: 12px;">Success!</h2>
                             <p style="color: #166534; margin-bottom: 20px;">Fitbit connected successfully.</p>
-                            <p style="color: #166534; font-size: 14px;">This window will close automatically...</p>
+                            <p style="color: #166534; font-size: 14px;">Updating dashboard...</p>
+                            <button onclick="finishAndClose()" style="margin-top: 20px; padding: 10px 20px; background: #16a34a; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                                Close Now
+                            </button>
                         </div>
                     </div>
                 `;
+                
+                // Try to reload parent immediately via direct access
+                try {
+                    console.log('[Popup] Attempting to reload opener immediately');
+                    window.opener.location.reload();
+                } catch (e) {
+                    console.log('[Popup] Unable to reload opener (probably cross-origin):', e);
+                    // Ignore cross-origin errors, localStorage will handle it
+                }
+
+                // Auto-close after delay
                 setTimeout(function() {
+                    console.log('[Popup] Auto-closing popup after success');
                     window.close();
                 }, 1500);
             }

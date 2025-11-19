@@ -3,6 +3,12 @@
 {% block title %}Dashboard - Fitbit Sync{% endblock %}
 
 {% block content %}
+<script>
+// Enforce localhost to ensure OAuth popups work correctly (Cross-Origin issues with 127.0.0.1)
+if (window.location.hostname === '127.0.0.1') {
+    window.location.hostname = 'localhost';
+}
+</script>
 <div class="space-y-6">
     <!-- Page Header -->
     <div class="fade-in">
@@ -273,22 +279,6 @@
                     <p class="mt-2 text-xs text-gray-500">Select specific data types or choose "All Data".</p>
                 </div>
 
-                <div>
-                    <label for="granularity" class="block text-sm font-medium text-gray-700 mb-2">
-                        Intraday Data Granularity
-                        <span class="text-xs text-gray-500">(for Steps & Heart Rate)</span>
-                    </label>
-                    <select name="granularity" id="granularity"
-                            class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
-                        <option value="1min">1 minute (most detailed, larger files)</option>
-                        <option value="5min">5 minutes (good balance)</option>
-                        <option value="15min" selected>15 minutes (smaller files)</option>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500">
-                        Lower granularity = more data points. Use 15min to reduce file size and API calls.
-                    </p>
-                </div>
-
                 <div class="flex flex-col sm:flex-row gap-3">
                     <button type="submit" id="syncButton"
                             class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
@@ -492,6 +482,7 @@ let oauthWindow = null;
 let oauthCheckInterval = null;
 
 function openFitbitOAuth(authorizeUrl, participantId) {
+    console.log('[Dashboard] openFitbitOAuth called for participant:', participantId);
     const loadingDiv = document.getElementById('oauthLoading');
     if (loadingDiv) {
         loadingDiv.classList.remove('hidden');
@@ -507,9 +498,11 @@ function openFitbitOAuth(authorizeUrl, participantId) {
         'FitbitOAuth',
         'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
     );
+    console.log('[Dashboard] window.open returned:', oauthWindow);
     
     if (!oauthWindow) {
         alert('Popup was blocked! Please allow popups for this site and try again.');
+        console.log('[Dashboard] Popup blocked by browser');
         if (loadingDiv) {
             loadingDiv.classList.add('hidden');
         }
@@ -518,6 +511,7 @@ function openFitbitOAuth(authorizeUrl, participantId) {
     
     oauthCheckInterval = setInterval(function() {
         if (oauthWindow.closed) {
+            console.log('[Dashboard] Detected popup closed (no localStorage signal). Reloading.');
             clearInterval(oauthCheckInterval);
             if (loadingDiv) {
                 loadingDiv.classList.add('hidden');
@@ -526,6 +520,21 @@ function openFitbitOAuth(authorizeUrl, participantId) {
         }
     }, 500);
 }
+
+// Listen for success signal from popup via localStorage
+window.addEventListener('storage', function(event) {
+    if (event.key === 'fitbit_oauth_success') {
+        console.log('[Dashboard] Received fitbit_oauth_success event:', event.newValue);
+        localStorage.removeItem('fitbit_oauth_success');
+        
+        if (oauthWindow && !oauthWindow.closed) {
+            console.log('[Dashboard] Closing popup due to success signal');
+            oauthWindow.close();
+        }
+        
+        window.location.reload();
+    }
+});
 
 // Attach to connect button
 const connectBtn = document.getElementById('connectFitbitBtn');
@@ -539,10 +548,28 @@ if (connectBtn) {
 
 // Handle OAuth callback in popup (closes popup and notifies parent)
 if (window.opener && window.location.pathname.includes('/fitbit/callback')) {
-    // We're in the popup window after OAuth callback
+    console.log('[Popup callback] Fitbit callback loaded inside popup');
+    // Signal parent immediately via localStorage
+    try {
+        localStorage.setItem('fitbit_oauth_success', Date.now().toString());
+        console.log('[Popup callback] localStorage success flag set');
+    } catch (e) {
+        console.log('[Popup callback] localStorage failed:', e);
+    }
+
+    // Try to reload parent immediately
+    try {
+        window.opener.location.reload();
+        console.log('[Popup callback] Requested parent reload');
+    } catch (e) {
+        console.log('[Popup callback] Unable to reload parent (likely cross-origin):', e);
+    }
+
+    // Auto-close after delay
     setTimeout(function() {
+        console.log('[Popup callback] Closing popup shortly after callback');
         window.close();
-    }, 2000); // Close after 2 seconds to show success message
+    }, 1500); 
 }
 
 // Resource selection: "All Data" toggles all checkboxes
