@@ -85,10 +85,18 @@ def sync_date_range(
     end_date: date,
     participant_id: str = "default",
     resources: Optional[List[str]] = None,
-    granularity: str = "1min",
 ) -> Dict[str, Any]:
     resources = normalize_resources(resources)
-    logger.info(f"Starting date range sync for {participant_id}: {start_date} to {end_date}, resources={resources}, granularity={granularity}")
+    
+    # Calculate total days
+    total_days = (end_date - start_date).days + 1
+    
+    # If more than 30 days, split into chunks
+    if total_days > 30:
+        logger.info(f"Large date range detected ({total_days} days). Splitting into 30-day chunks for {participant_id}")
+        return _sync_date_range_chunked(session, start_date, end_date, participant_id, resources)
+    
+    logger.info(f"Starting date range sync for {participant_id}: {start_date} to {end_date}, resources={resources}")
 
     token = get_token_for_participant(session, participant_id)
     if not token:
@@ -128,7 +136,7 @@ def sync_date_range(
                 if "steps" in resources:
                     # Daily summary
                     steps = fb.time_series("activities/steps", base_date=date_str, period="1d")
-                    with open(data_path / f"{date_str}_steps_summary.json", "w") as f:
+                    with open(data_path / f"{date_str}_steps.json", "w") as f:
                         json.dump(steps, f, indent=2)
                     
                     # Try to extract rate limit info from the client's last response
@@ -141,47 +149,16 @@ def sync_date_range(
                                 rate_limit_info['reset_time'] = last_response.headers.get('Fitbit-Rate-Limit-Reset')
                     except Exception:
                         pass
-                    
-                    # Intraday data - use correct API method with time range
-                    try:
-                        steps_intraday = fb.intraday_time_series(
-                            resource="activities/steps",
-                            base_date=date_str,
-                            detail_level=granularity,
-                            start_time="00:00",
-                            end_time="23:59"
-                        )
-                        with open(data_path / f"{date_str}_steps_intraday_{granularity}.json", "w") as f:
-                            json.dump(steps_intraday, f, indent=2)
-                        logger.debug(f"Steps intraday ({granularity}) saved for {date_str}")
-                    except Exception as steps_intra_error:
-                        logger.warning(f"Failed to fetch steps intraday for {date_str}: {steps_intra_error}")
-                        # Continue even if intraday fails
 
                 if "heartrate" in resources:
                     # Daily summary
                     try:
                         hr_summary = fb.time_series("activities/heart", base_date=date_str, period="1d")
-                        with open(data_path / f"{date_str}_heartrate_summary.json", "w") as f:
+                        with open(data_path / f"{date_str}_heartrate.json", "w") as f:
                             json.dump(hr_summary, f, indent=2)
-                    except Exception:
-                        pass
-                    
-                    # Intraday data - use correct API method with time range
-                    try:
-                        hr_intraday = fb.intraday_time_series(
-                            resource="activities/heart",
-                            base_date=date_str,
-                            detail_level=granularity,
-                            start_time="00:00",
-                            end_time="23:59"
-                        )
-                        with open(data_path / f"{date_str}_heartrate_intraday_{granularity}.json", "w") as f:
-                            json.dump(hr_intraday, f, indent=2)
-                        logger.debug(f"Heart rate intraday ({granularity}) saved for {date_str}")
                     except Exception as hr_error:
-                        logger.warning(f"Failed to fetch heart rate intraday for {date_str}: {hr_error}")
-                        errors.append(f"{date_str} HR Intraday: {hr_error}")
+                        logger.warning(f"Failed to fetch heart rate for {date_str}: {hr_error}")
+                        errors.append(f"{date_str} HR: {hr_error}")
 
                 if "sleep" in resources:
                     try:
@@ -245,11 +222,63 @@ def sync_date_range(
         return {"status": "error", "error": str(e)}
 
 
+def _sync_date_range_chunked(
+    session: Session,
+    start_date: date,
+    end_date: date,
+    participant_id: str,
+    resources: Optional[List[str]],
+) -> Dict[str, Any]:
+    """Sync large date ranges in 30-day chunks to avoid rate limits."""
+    import time
+    
+    all_synced_days: List[str] = []
+    all_errors: List[str] = []
+    rate_limit_info = {}
+    
+    current_chunk_start = start_date
+    chunk_num = 0
+    
+    while current_chunk_start <= end_date:
+        chunk_num += 1
+        # Calculate chunk end (30 days or remaining days)
+        chunk_end = min(current_chunk_start + timedelta(days=29), end_date)
+        
+        logger.info(f"Processing chunk {chunk_num}: {current_chunk_start} to {chunk_end}")
+        
+        # Sync this chunk
+        result = sync_date_range(session, current_chunk_start, chunk_end, participant_id, resources)
+        
+        if result["status"] == "ok":
+            all_synced_days.extend(result.get("synced_days", []))
+            all_errors.extend(result.get("errors", []))
+            rate_limit_info = result.get("rate_limit", {})
+        else:
+            # If chunk fails completely, record error and continue
+            all_errors.append(f"Chunk {chunk_num} ({current_chunk_start} to {chunk_end}): {result.get('error', 'Unknown error')}")
+        
+        # Move to next chunk
+        current_chunk_start = chunk_end + timedelta(days=1)
+        
+        # Delay between chunks (10 seconds)
+        if current_chunk_start <= end_date:
+            logger.info(f"Chunk {chunk_num} complete. Waiting 10 seconds before next chunk...")
+            time.sleep(10)
+    
+    return {
+        "status": "ok",
+        "synced_days": all_synced_days,
+        "errors": all_errors,
+        "count": len(all_synced_days),
+        "rate_limit": rate_limit_info,
+    }
+
+
 def sync_single_user(session: Session, participant_id: str = "default", 
-                     resources: Optional[List[str]] = None, granularity: str = "1min") -> Dict[str, Any]:
+                     resources: Optional[List[str]] = None) -> Dict[str, Any]:
     yesterday = date.today() - timedelta(days=1)
     result = sync_date_range(session, yesterday, yesterday, participant_id=participant_id, 
-                            resources=resources, granularity=granularity)
+                            resources=resources)
 
     if result["status"] == "ok":
         result["date"] = yesterday.isoformat()
@@ -300,10 +329,10 @@ def export_data(
 
         if "steps" in resources:
             steps_val = 0
-            # Try summary file first (new naming), then old naming for backward compat
-            steps_file = data_path / f"{date_str}_steps_summary.json"
+            # Try new naming first, then old naming for backward compat
+            steps_file = data_path / f"{date_str}_steps.json"
             if not steps_file.exists():
-                steps_file = data_path / f"{date_str}_steps.json"
+                steps_file = data_path / f"{date_str}_steps_summary.json"
             
             if steps_file.exists():
                 try:
@@ -317,12 +346,12 @@ def export_data(
 
         if "heartrate" in resources:
             resting_hr = None
-            # Try summary file first (new naming), then old naming
-            hr_file = data_path / f"{date_str}_heartrate_summary.json"
+            # Try new naming first, then old naming for backward compat
+            hr_file = data_path / f"{date_str}_heartrate.json"
+            if not hr_file.exists():
+                hr_file = data_path / f"{date_str}_heartrate_summary.json"
             if not hr_file.exists():
                 hr_file = data_path / f"{date_str}_heartrate_1min.json"
-            if not hr_file.exists():
-                hr_file = data_path / f"{date_str}_heartrate.json"
             
             if hr_file.exists():
                 try:

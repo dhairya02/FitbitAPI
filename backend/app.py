@@ -190,8 +190,9 @@ def dashboard():
         yesterday = date.today() - timedelta(days=1)
         selected_resources = session.get("selected_resources") or DEFAULT_RESOURCES.copy()
         
-        # Get rate limit info from session
+        # Get rate limit info and last sync results from session
         rate_limit_info = session.get("rate_limit_info", {})
+        last_sync_results = session.get("last_sync_results", {})
 
         return render_template(
             "dashboard.html",
@@ -205,6 +206,7 @@ def dashboard():
             resource_options=RESOURCE_OPTIONS,
             selected_resources=selected_resources,
             rate_limit_info=rate_limit_info,
+            last_sync_results=last_sync_results,
         )
     finally:
         db.close()
@@ -358,7 +360,6 @@ def sync_now():
 
     start_str = request.form.get("start_date")
     end_str = request.form.get("end_date")
-    granularity = request.form.get("granularity", "1min")
     raw_resources = get_selected_resources(request.form.getlist("resources"))
     effective_resources = normalize_resources(raw_resources)
 
@@ -367,16 +368,24 @@ def sync_now():
             start_date = date.fromisoformat(start_str)
             end_date = date.fromisoformat(end_str)
             result = sync_date_range(db, start_date, end_date, participant_id=current_pid, 
-                                    resources=effective_resources, granularity=granularity)
-            success_msg = f"Synced {result.get('count', 0)} days for {current_pid} ({granularity} granularity)"
+                                    resources=effective_resources)
+            success_msg = f"Synced {result.get('count', 0)} days for {current_pid}"
         else:
-            result = sync_single_user(db, participant_id=current_pid, resources=effective_resources, 
-                                     granularity=granularity)
+            result = sync_single_user(db, participant_id=current_pid, resources=effective_resources)
             success_msg = f"Successfully synced data for {current_pid} on {result.get('date')}"
 
-        # Store rate limit info in session for display
+        # Store rate limit info and sync results in session for display
         if result.get("rate_limit"):
             session["rate_limit_info"] = result["rate_limit"]
+        
+        # Store sync results (both successes and failures)
+        if result["status"] == "ok":
+            session["last_sync_results"] = {
+                "synced_days": result.get("synced_days", []),
+                "errors": result.get("errors", []),
+                "participant_id": current_pid,
+                "date_range": f"{start_str} to {end_str}" if start_str else result.get("date"),
+            }
         
         if result["status"] == "ok":
             logger.info(success_msg)

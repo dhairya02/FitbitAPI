@@ -210,31 +210,17 @@
                 <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                     <p class="text-sm font-semibold text-blue-900 mb-1">📝 Important:</p>
                     <p class="text-sm text-blue-800">
-                        A popup will open for Fitbit login. Make sure to log in with 
+                        You will be redirected to Fitbit login. Make sure to log in with 
                         <strong>{{ current_participant_id }}'s Fitbit account</strong>, not your own or another participant's account.
                     </p>
                 </div>
-                <button id="connectFitbitBtn" 
-                        data-authorize-url="{{ url_for('fitbit_authorize') }}"
-                        data-participant="{{ current_participant_id }}"
-                        class="inline-flex justify-center items-center w-full px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
+                <a href="{{ url_for('fitbit_authorize') }}"
+                   class="inline-flex justify-center items-center w-full px-6 py-3 border border-transparent text-base font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                     <svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                     </svg>
                     Connect Fitbit for {{ current_participant_id }}
-                </button>
-                
-                <!-- OAuth Popup Loading Indicator -->
-                <div id="oauthLoading" class="hidden mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div class="flex items-center">
-                        <svg class="animate-spin h-5 w-5 text-blue-600 mr-3" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span class="text-sm font-medium text-blue-900">Waiting for Fitbit authorization...</span>
-                    </div>
-                    <p class="text-xs text-blue-700 mt-2">Please complete the login in the popup window.</p>
-                </div>
+                </a>
             </div>
             {% else %}
             <!-- Sync & Export Form (when connected) -->
@@ -273,22 +259,6 @@
                     <p class="mt-2 text-xs text-gray-500">Select specific data types or choose "All Data".</p>
                 </div>
 
-                <div>
-                    <label for="granularity" class="block text-sm font-medium text-gray-700 mb-2">
-                        Intraday Data Granularity
-                        <span class="text-xs text-gray-500">(for Steps & Heart Rate)</span>
-                    </label>
-                    <select name="granularity" id="granularity"
-                            class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border">
-                        <option value="1min">1 minute (most detailed, larger files)</option>
-                        <option value="5min">5 minutes (good balance)</option>
-                        <option value="15min" selected>15 minutes (smaller files)</option>
-                    </select>
-                    <p class="mt-1 text-xs text-gray-500">
-                        Lower granularity = more data points. Use 15min to reduce file size and API calls.
-                    </p>
-                </div>
-
                 <div class="flex flex-col sm:flex-row gap-3">
                     <button type="submit" id="syncButton"
                             class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
@@ -306,7 +276,7 @@
                         Stop Sync
                     </button>
                     
-                    <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="csv"
+                    <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="csv" id="exportCSVButton"
                             class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors">
                         <svg class="h-4 w-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -314,7 +284,7 @@
                         Export to CSV
                     </button>
                     
-                    <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="xlsx"
+                    <button type="submit" formaction="{{ url_for('export_data_route') }}" name="format" value="xlsx" id="exportExcelButton"
                             class="inline-flex justify-center items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
                         <svg class="h-4 w-4 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -356,6 +326,75 @@
         </div>
     </div>
 
+    <!-- Sync Results Table -->
+    {% if last_sync_results and (last_sync_results.synced_days or last_sync_results.errors) %}
+    <div class="fade-in bg-white rounded-lg shadow-md border border-gray-200 p-6">
+        <h3 class="text-lg font-semibold text-gray-900 mb-3">Last Sync Results</h3>
+        <p class="text-sm text-gray-600 mb-4">
+            Participant: <span class="font-semibold">{{ last_sync_results.participant_id }}</span> | 
+            Date Range: <span class="font-semibold">{{ last_sync_results.date_range }}</span>
+        </p>
+        
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for day in last_sync_results.synced_days %}
+                    <tr>
+                        <td class="px-4 py-2 text-sm text-gray-900">{{ day }}</td>
+                        <td class="px-4 py-2">
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
+                                ✓ Success
+                            </span>
+                        </td>
+                        <td class="px-4 py-2 text-sm text-gray-500">—</td>
+                    </tr>
+                    {% endfor %}
+                    
+                    {% for error in last_sync_results.errors %}
+                    {% set error_parts = error.split(':') %}
+                    {% set error_date = error_parts[0].strip() %}
+                    {% set error_msg = error_parts[1].strip() if error_parts|length > 1 else 'Failed' %}
+                    <tr class="bg-red-50">
+                        <td class="px-4 py-2 text-sm text-gray-900">{{ error_date }}</td>
+                        <td class="px-4 py-2">
+                            <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-800">
+                                ✗ Failed
+                            </span>
+                            <p class="text-xs text-gray-600 mt-1">{{ error_msg }}</p>
+                        </td>
+                        <td class="px-4 py-2">
+                            <button onclick="retryDay('{{ error_date }}')" 
+                                    class="text-xs text-blue-600 hover:text-blue-800 font-medium">
+                                Retry
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        {% if last_sync_results.errors %}
+        <div class="mt-4 flex justify-end">
+            <button onclick="retryAllFailed()"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-yellow-600 hover:bg-yellow-700 transition-colors">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+                Retry All Failed Days
+            </button>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+    
     <!-- Rate Limit Status Card -->
     {% if rate_limit_info and rate_limit_info.remaining %}
     <div class="fade-in bg-white rounded-lg shadow-md border border-gray-200 p-6">
@@ -423,7 +462,7 @@
                         <li><strong>Sync Date Range:</strong> Pulls selected data types for every day in the range.</li>
                         <li><strong>Export to CSV/Excel:</strong> Creates a file with the selected data for the range.</li>
                         <li>Data is saved in <code class="bg-blue-100 px-1 rounded">fitbit_data/{{ current_participant_id }}/</code> (JSON) and <code class="bg-blue-100 px-1 rounded">fitbit_data/exports/</code> (CSV/Excel).</li>
-                        <li><strong>Tip:</strong> Fitbit limits to 150 requests/hour. Use 15-min granularity and smaller date ranges to stay under limits.</li>
+                        <li><strong>Tip:</strong> Fitbit limits to 150 requests/hour. Use smaller date ranges to stay under limits.</li>
                     </ul>
                 </div>
             </div>
@@ -487,62 +526,20 @@ document.getElementById('addParticipantModal').addEventListener('click', functio
     }
 });
 
-// OAuth Popup Handler
-let oauthWindow = null;
-let oauthCheckInterval = null;
-
-function openFitbitOAuth(authorizeUrl, participantId) {
-    const loadingDiv = document.getElementById('oauthLoading');
-    if (loadingDiv) {
-        loadingDiv.classList.remove('hidden');
-    }
-    
-    const width = 600;
-    const height = 700;
-    const left = (screen.width - width) / 2;
-    const top = (screen.height - height) / 2;
-    
-    oauthWindow = window.open(
-        authorizeUrl,
-        'FitbitOAuth',
-        'width=' + width + ',height=' + height + ',left=' + left + ',top=' + top + ',resizable=yes,scrollbars=yes'
-    );
-    
-    if (!oauthWindow) {
-        alert('Popup was blocked! Please allow popups for this site and try again.');
-        if (loadingDiv) {
-            loadingDiv.classList.add('hidden');
-        }
-        return;
-    }
-    
-    oauthCheckInterval = setInterval(function() {
-        if (oauthWindow.closed) {
-            clearInterval(oauthCheckInterval);
-            if (loadingDiv) {
-                loadingDiv.classList.add('hidden');
-            }
-            window.location.reload();
-        }
-    }, 500);
+// Retry sync for specific day or all failed days
+function retryDay(dateStr) {
+    // Set date range to just this one day
+    document.getElementById('start_date').value = dateStr;
+    document.getElementById('end_date').value = dateStr;
+    // Submit the sync form
+    document.getElementById('syncForm').requestSubmit();
 }
 
-// Attach to connect button
-const connectBtn = document.getElementById('connectFitbitBtn');
-if (connectBtn) {
-    connectBtn.addEventListener('click', function() {
-        const url = this.getAttribute('data-authorize-url');
-        const participant = this.getAttribute('data-participant');
-        openFitbitOAuth(url, participant);
-    });
-}
-
-// Handle OAuth callback in popup (closes popup and notifies parent)
-if (window.opener && window.location.pathname.includes('/fitbit/callback')) {
-    // We're in the popup window after OAuth callback
-    setTimeout(function() {
-        window.close();
-    }, 2000); // Close after 2 seconds to show success message
+function retryAllFailed() {
+    if (confirm('This will retry syncing all failed days. Continue?')) {
+        // Submit the sync form - it will use the current date range which includes the failed days
+        document.getElementById('syncForm').requestSubmit();
+    }
 }
 
 // Resource selection: "All Data" toggles all checkboxes
@@ -606,7 +603,9 @@ document.addEventListener('DOMContentLoaded', function() {
                 let elapsed = 0;
                 progressInterval = setInterval(() => {
                     elapsed++;
-                    progress = Math.min(95, (elapsed / days) * 100);
+                    // For large date ranges, estimate based on chunks
+                    const estimatedTime = days > 30 ? (Math.ceil(days / 30) * 10) + days : days;
+                    progress = Math.min(98, (elapsed / estimatedTime) * 100);
                     document.getElementById('progressBar').style.width = progress + '%';
                     document.getElementById('progressText').textContent = `Syncing ${days} day(s)... ${Math.floor(progress)}% complete`;
                 }, 1000);
@@ -628,6 +627,22 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     }
+    
+    // Export progress handling (no need for progress bar, just show completion)
+    const exportButtons = [document.getElementById('exportCSVButton'), document.getElementById('exportExcelButton')];
+    exportButtons.forEach(btn => {
+        if (btn) {
+            btn.addEventListener('click', function() {
+                // Downloads happen instantly, no progress bar needed
+                // Just show a quick notification
+                const format = this.value === 'csv' ? 'CSV' : 'Excel';
+                setTimeout(() => {
+                    // Could add a toast notification here if desired
+                    console.log(`${format} export started`);
+                }, 100);
+            });
+        }
+    });
 });
 </script>
 
