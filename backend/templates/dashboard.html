@@ -526,7 +526,21 @@ document.getElementById('addParticipantModal').addEventListener('click', functio
     }
 });
 
-// Retry sync for specific day or all failed days
+// Store failed dates from server
+{% if last_sync_results and last_sync_results.errors %}
+const failedDates = {{ last_sync_results.errors | tojson | safe }}.map(function(error) {
+    // Extract date from error string (format: "2025-11-18: Error message")
+    const parts = error.split(':');
+    return parts[0].trim();
+}).filter(function(dateStr) {
+    // Only keep valid dates (YYYY-MM-DD format)
+    return /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+});
+{% else %}
+const failedDates = [];
+{% endif %}
+
+// Retry sync for specific day
 function retryDay(dateStr) {
     // Set date range to just this one day
     document.getElementById('start_date').value = dateStr;
@@ -535,9 +549,20 @@ function retryDay(dateStr) {
     document.getElementById('syncForm').requestSubmit();
 }
 
+// Retry all failed days
 function retryAllFailed() {
-    if (confirm('This will retry syncing all failed days. Continue?')) {
-        // Submit the sync form - it will use the current date range which includes the failed days
+    if (failedDates.length === 0) {
+        alert('No failed dates to retry.');
+        return;
+    }
+    
+    const message = `This will retry ${failedDates.length} failed day(s). Continue?`;
+    if (confirm(message)) {
+        // Set date range to cover all failed dates
+        const sortedDates = failedDates.sort();
+        document.getElementById('start_date').value = sortedDates[0];
+        document.getElementById('end_date').value = sortedDates[sortedDates.length - 1];
+        // Submit the sync form
         document.getElementById('syncForm').requestSubmit();
     }
 }
